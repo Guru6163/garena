@@ -3,8 +3,12 @@ import { PrismaClient } from '@/lib/generated/prisma';
 
 const prisma = new PrismaClient();
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const sessionId = Number(params.id);
+export async function PUT(req: NextRequest) {
+  // Extract session ID from the URL
+  const url = new URL(req.url);
+  const parts = url.pathname.split('/');
+  const sessionId = Number(parts[parts.length - 2]); // [id] is the second to last segment
+
   if (!sessionId) return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
 
   // Fetch session with game info
