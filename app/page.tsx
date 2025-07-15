@@ -178,7 +178,7 @@ export default function HomePage() {
           />
         )}
         {activeTab === "logs" && (
-          <SessionLogs sessions={sessions} games={games} users={users} calculateAmount={calculateAmount} />
+          <SessionLogs games={games} users={users} calculateAmount={calculateAmount} />
         )}
       </div>
     </div>

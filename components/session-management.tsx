@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import type { Game, User, Session } from "@/types/domain";
 
 interface SessionManagementProps {
   games: Game[]
@@ -113,11 +114,13 @@ export function SessionManagement({
   }
 
   const getCurrentAmountOld = (session: Session) => {
-    if (!session.isActive) return calculateAmount(session)
+    if (!session.is_active) return calculateAmount(session)
 
     const currentTime = new Date()
-    const duration = (currentTime.getTime() - session.startTime.getTime()) / (1000 * 60)
-    const ratePerMinute = session.rateType === "hour" ? session.rate / 60 : session.rate / 30
+    const duration = (currentTime.getTime() - new Date(session.start_time).getTime()) / (1000 * 60)
+    const ratePerMinute = session.games?.rate_type === "hour"
+      ? (session.games?.rate ?? 0) / 60
+      : (session.games?.rate ?? 0) / 30
 
     return Math.round(duration * ratePerMinute)
   }

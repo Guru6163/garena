@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Printer, Filter, Download, Calendar } from "lucide-react"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import type { Game, User, Session } from "@/types/domain";
 
 interface SessionLogsProps {
   games: Game[]
