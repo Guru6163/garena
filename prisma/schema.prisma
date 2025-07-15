@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  name       String
+  phone      String?  @unique
+  email      String?  @unique
+  created_at DateTime @default(now())
+  is_active  Boolean  @default(true)
+  sessions   Session[]
+}
+
+model Game {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  rate       Int
+  rate_type  String   // '30min' or 'hour'
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  sessions   Session[]
+}
+
+model Session {
+  id         Int      @id @default(autoincrement())
+  user       User     @relation(fields: [user_id], references: [id])
+  user_id    Int
+  game       Game     @relation(fields: [game_id], references: [id])
+  game_id    Int
+  start_time DateTime
+  end_time   DateTime?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  // Add snapshot fields for game details
+  game_name  String?
+  game_rate  Int?
+  game_rate_type String?
+  bill_amount Int?
+  bill_details String?
+}
