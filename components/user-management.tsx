@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit, Plus, Phone, Mail } from "lucide-react"
+import { Trash2, Edit, Plus, Phone, Mail, MessageCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -196,26 +196,38 @@ export function UserManagement({ users, onDataChange }: UserManagementProps) {
         <Table className="w-full min-w-full">
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead className="w-1/5">Name</TableHead>
+              <TableHead className="w-1/5">Phone</TableHead>
+              <TableHead className="w-1/5">Email</TableHead>
+              <TableHead className="w-1/5">Status</TableHead>
+              <TableHead className="w-1/5">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
-                <TableCell className="min-w-full">{user.name}</TableCell>
-                <TableCell className="min-w-full">{user.phone || <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell className="min-w-full">{user.email || <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell className="min-w-full">
+                <TableCell className="w-1/5">{user.name}</TableCell>
+                <TableCell className="w-1/5">{user.phone || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="w-1/5">{user.email || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="w-1/5">
                   <Badge variant={user.is_active ? "default" : "secondary"}>
                     {user.is_active ? "Active" : "Inactive"}
                   </Badge>
                 </TableCell>
-                <TableCell className="min-w-full">
+                <TableCell className="w-1/5">
                   <div className="flex gap-2">
+                    {user.phone && (
+                      <a
+                        href={`https://wa.me/${user.phone.replace(/[^\d]/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Send WhatsApp message"
+                      >
+                        <Button variant="outline" size="sm">
+                          <MessageCircle className="h-4 w-4 text-green-600" />
+                        </Button>
+                      </a>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => startEdit(user)} disabled={loading}>
                       <Edit className="h-4 w-4" />
                     </Button>
