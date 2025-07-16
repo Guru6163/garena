@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Clock, Users, GamepadIcon, Plus, UserPlus } from "lucide-react"
+import { Clock, Users, GamepadIcon, Plus, UserPlus, IndianRupee, BarChart2, LayoutDashboard, User, ListOrdered, Package } from "lucide-react"
 import { GameManagement } from "@/components/game-management"
 import { UserManagement } from "@/components/user-management"
 import { SessionManagement } from "@/components/session-management"
@@ -132,6 +132,11 @@ export default function HomePage() {
   // Calculate total revenue for the current month
   const totalRevenueThisMonth = monthData.reduce((sum, day) => sum + day.revenue, 0)
 
+  // Utility to format number as Indian Rupee with commas
+  function formatINR(amount: number) {
+    return amount.toLocaleString('en-IN')
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -154,22 +159,27 @@ export default function HomePage() {
         {/* Navigation */}
         <div className="flex gap-2 mb-6 flex-wrap">
           <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => setActiveTab("dashboard")}>
+            <LayoutDashboard className="h-4 w-4 mr-2" />
             Dashboard
           </Button>
           <Button variant={activeTab === "users" ? "default" : "outline"} onClick={() => setActiveTab("users")}>
-            <UserPlus className="h-4 w-4 mr-2" />
+            <User className="h-4 w-4 mr-2" />
             Users
           </Button>
           <Button variant={activeTab === "games" ? "default" : "outline"} onClick={() => setActiveTab("games")}>
+            <GamepadIcon className="h-4 w-4 mr-2" />
             Manage Games
           </Button>
           <Button variant={activeTab === "sessions" ? "default" : "outline"} onClick={() => setActiveTab("sessions")}>
+            <Clock className="h-4 w-4 mr-2" />
             Sessions
           </Button>
           <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => setActiveTab("logs")}>
+            <ListOrdered className="h-4 w-4 mr-2" />
             Session Logs
           </Button>
           <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}>
+            <Package className="h-4 w-4 mr-2" />
             Extras
           </Button>
         </div>
@@ -181,7 +191,7 @@ export default function HomePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <Users className="h-6 w-6 text-blue-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{users.filter((u) => u.is_active).length}</div>
@@ -192,7 +202,7 @@ export default function HomePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Games</CardTitle>
-                  <GamepadIcon className="h-4 w-4 text-muted-foreground" />
+                  <GamepadIcon className="h-6 w-6 text-green-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{games.filter((g) => g.is_active).length}</div>
@@ -203,7 +213,7 @@ export default function HomePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <Clock className="h-6 w-6 text-purple-600" />
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{activeSessions.length}</div>
@@ -214,10 +224,10 @@ export default function HomePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  <IndianRupee className="h-6 w-6 text-red-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{totalRevenue}</div>
+                  <div className="text-2xl font-bold">₹{formatINR(totalRevenue)}</div>
                   <p className="text-xs text-muted-foreground">From completed sessions</p>
                 </CardContent>
               </Card>
@@ -225,10 +235,10 @@ export default function HomePage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total Revenue This Month</CardTitle>
-                  <Plus className="h-4 w-4 text-muted-foreground" />
+                  <BarChart2 className="h-6 w-6 text-indigo-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{totalRevenueThisMonth}</div>
+                  <div className="text-2xl font-bold">₹{formatINR(totalRevenueThisMonth)}</div>
                   <p className="text-xs text-muted-foreground">All completed sessions this month</p>
                 </CardContent>
               </Card>

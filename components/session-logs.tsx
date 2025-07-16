@@ -17,6 +17,11 @@ interface SessionLogsProps {
   calculateAmount: (session: Session) => number
 }
 
+// Utility to format number as Indian Rupee with commas
+function formatINR(amount: number) {
+  return amount.toLocaleString('en-IN')
+}
+
 export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [filters, setFilters] = useState({
@@ -163,7 +168,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       Total Sessions: ${filteredSessions.length}
       Active Sessions: ${filteredSessions.filter((s) => s.is_active).length}
       Completed Sessions: ${filteredSessions.filter((s) => !s.is_active).length}
-      Total Revenue: ₹${totalRevenue}
+      Total Revenue: ₹${formatINR(totalRevenue)}
       
       SESSION DETAILS:
       ${filteredSessions
@@ -172,7 +177,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       ${session.users?.name} - ${session.games?.name}
       ${new Date(session.start_time).toLocaleString()} - ${session.end_time ? new Date(session.end_time).toLocaleString() : "Ongoing"}
       Duration: ${formatDuration(session.start_time, session.end_time)}
-      Amount: ₹${session.is_active ? getCurrentAmount(session) : calculateAmount(session)}
+      Amount: ₹${formatINR(session.is_active ? getCurrentAmount(session) : calculateAmount(session))}
       `,
         )
         .join("\n")}
@@ -236,11 +241,11 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
         <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
           <tbody>
-            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${formatINR(amount)}</td></tr>
             ${extrasRows}
-            ${extrasRows ? `<tr><td style="padding: 6px 0; color: #475569; font-weight: bold;">Extras Total</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: bold;">₹${extrasTotal}</td></tr>` : ''}
+            ${extrasRows ? `<tr><td style="padding: 6px 0; color: #475569; font-weight: bold;">Extras Total</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: bold;">₹${formatINR(extrasTotal)}</td></tr>` : ''}
             <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 12px 0; font-size: 1.13rem; font-weight: bold; color: #1e293b;">Grand Total</td><td style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${grandTotal}</td></tr>
+            <tr><td style="padding: 12px 0; font-size: 1.13rem; font-weight: bold; color: #1e293b;">Grand Total</td><td style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${formatINR(grandTotal)}</td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
@@ -384,7 +389,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
                 <TableCell className="border border-gray-200">{new Date(session.start_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</TableCell>
                 <TableCell className="border border-gray-200">{session.end_time ? new Date(session.end_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : 'Ongoing'}</TableCell>
                 <TableCell className="border border-gray-200">{formatDuration(session.start_time, session.end_time)}</TableCell>
-                <TableCell className="border border-gray-200">₹{getTotalAmount(session)}</TableCell>
+                <TableCell className="border border-gray-200">₹{formatINR(getTotalAmount(session))}</TableCell>
                 <TableCell className="border border-gray-200">{session.is_active ? 'Active' : 'Completed'}</TableCell>
                 <TableCell className="border border-gray-200">
                   <Button variant="outline" size="sm" onClick={() => printBill(session)}>
