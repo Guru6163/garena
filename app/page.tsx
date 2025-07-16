@@ -159,33 +159,29 @@ export default function HomePage() {
 
         {/* Navigation */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => setActiveTab("dashboard")}>
+          <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => setActiveTab("dashboard")}> 
             <LayoutDashboard className="h-4 w-4 mr-2" />
             Dashboard
           </Button>
-          <Button variant={activeTab === "users" ? "default" : "outline"} onClick={() => setActiveTab("users")}>
-            <User className="h-4 w-4 mr-2" />
-            Users
-          </Button>
-          <Button variant={activeTab === "games" ? "default" : "outline"} onClick={() => setActiveTab("games")}>
-            <GamepadIcon className="h-4 w-4 mr-2" />
-            Manage Games
-          </Button>
-          <Button variant={activeTab === "sessions" ? "default" : "outline"} onClick={() => setActiveTab("sessions")}>
+          <Button variant={activeTab === "sessions" ? "default" : "outline"} onClick={() => setActiveTab("sessions")}> 
             <Clock className="h-4 w-4 mr-2" />
             Sessions
           </Button>
-          <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => setActiveTab("logs")}>
+          <Button variant={activeTab === "games" ? "default" : "outline"} onClick={() => setActiveTab("games")}> 
+            <GamepadIcon className="h-4 w-4 mr-2" />
+            Manage Games
+          </Button>
+          <Button variant={activeTab === "users" ? "default" : "outline"} onClick={() => setActiveTab("users")}> 
+            <User className="h-4 w-4 mr-2" />
+            Users
+          </Button>
+          <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => setActiveTab("logs")}> 
             <ListOrdered className="h-4 w-4 mr-2" />
             Session Logs
           </Button>
-          <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}>
+          <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}> 
             <Package className="h-4 w-4 mr-2" />
             Extras
-          </Button>
-          <Button variant={activeTab === "cost-calculator" ? "default" : "outline"} onClick={() => setActiveTab("cost-calculator")}> 
-            <IndianRupee className="h-4 w-4 mr-2" />
-            Cost Calculator
           </Button>
         </div>
 
