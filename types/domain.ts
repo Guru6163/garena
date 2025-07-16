@@ -29,4 +29,5 @@ export type Session = {
   // Add any additional fields used in the frontend (e.g., durationSec, price)
   durationSec?: number;
   price?: number;
+  bill_details?: string | { total?: number; [key: string]: any };
 }; 

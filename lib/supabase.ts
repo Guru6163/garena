@@ -53,4 +53,5 @@ export type Session = {
   created_at: string
   users?: User
   games?: Game
+  bill_details?: string | { total?: number; [key: string]: any }
 }
