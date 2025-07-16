@@ -50,4 +50,26 @@ model Session {
   game_rate_type String?
   bill_amount Int?
   bill_details String?
+  // New: relation to session extras
+  extras     SessionProduct[]
+}
+
+model Product {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  price      Int      // price per unit
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  sessionProducts SessionProduct[]
+}
+
+model SessionProduct {
+  id         Int      @id @default(autoincrement())
+  session    Session  @relation(fields: [session_id], references: [id])
+  session_id Int
+  product    Product  @relation(fields: [product_id], references: [id])
+  product_id Int
+  quantity   Int
+  total_price Int     // price * quantity (snapshot)
+  created_at DateTime @default(now())
 }

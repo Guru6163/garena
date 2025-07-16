@@ -45,8 +45,9 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
   }, [filters])
 
   const filteredSessions = useMemo(() => {
+    // Only show completed (not active) sessions, regardless of filters
     return sessions
-      .filter((session) => !session.is_active) // Only ended sessions
+      .filter((session) => !session.is_active)
       .filter((session) => {
         // Game filter
         if (filters.gameId !== "all" && session.game_id.toString() !== filters.gameId) {
@@ -73,13 +74,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
           }
         }
 
-        // Status filter
-        if (filters.status === "active" && !session.is_active) {
-          return false
-        }
-        if (filters.status === "completed" && session.is_active) {
-          return false
-        }
+        // Status filter: already filtered out active sessions above
 
         return true
       })
@@ -108,6 +103,17 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const ratePerMinute = session.games.rate_type === "hour" ? session.games.rate / 60 : session.games.rate / 30
 
     return Math.round(durationMinutes * ratePerMinute)
+  }
+
+  // Helper to get total amount including extras
+  function getTotalAmount(session: Session) {
+    if (session.bill_details) {
+      try {
+        const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
+        if (typeof details.total === 'number') return details.total
+      } catch {}
+    }
+    return calculateAmount(session)
   }
 
   const clearFilters = () => {
@@ -191,24 +197,56 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const rate = session.games?.rate
     const rateType = session.games?.rate_type === '30min' ? '30 minutes' : 'hour'
 
+    // Parse bill details for extras
+    let extrasRows = ''
+    let extrasTotal = 0
+    let grandTotal = amount
+    if (session.bill_details) {
+      try {
+        const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
+        if (details.extras && Array.isArray(details.extras) && details.extras.length > 0) {
+          extrasRows = details.extras.map((extra: any) =>
+            `<tr><td style="padding: 6px 0; color: #555;">${extra.name} x${extra.quantity}</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${extra.price} x ${extra.quantity} = ₹${extra.total}</td></tr>`
+          ).join('')
+          extrasTotal = details.extrasTotal || details.extras.reduce((sum: number, e: any) => sum + (e.total || 0), 0)
+          grandTotal = (details.total || (amount + extrasTotal))
+        }
+      } catch {}
+    }
+
     const billContent = `
-      <div style="max-width: 400px; margin: 40px auto; border: 2px solid #222; border-radius: 16px; padding: 32px 24px; font-family: 'Segoe UI', Arial, sans-serif; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
-        <h2 style="text-align: center; font-size: 2rem; font-weight: bold; margin-bottom: 8px; letter-spacing: 2px; color: #1a202c;">GARENA GAMES</h2>
-        <div style="text-align: center; font-size: 1.1rem; color: #4a5568; margin-bottom: 18px;">Session Bill</div>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
+      <html><head>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+      </head><body style="margin:0;padding:0;">
+      <div style="max-width: 440px; margin: 40px auto; border: 2px solid #222; border-radius: 18px; padding: 36px 28px; font-family: 'Inter', 'Roboto', 'Arial', 'Helvetica Neue', Arial, sans-serif; background: #f9fafb; box-shadow: 0 6px 32px rgba(0,0,0,0.10);">
+        <h2 style="text-align: center; font-size: 2.2rem; font-weight: bold; margin-bottom: 10px; letter-spacing: 2px; color: #1a202c; font-family: inherit;">GARENA GAMES</h2>
+        <div style="text-align: center; font-size: 1.15rem; color: #6366f1; margin-bottom: 22px; font-weight: 600;">Session Bill</div>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 18px;"></div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 1.04rem;">
           <tbody>
-            <tr><td style="padding: 6px 0; color: #555;">Player</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: 500;">${userName}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Game</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: 500;">${gameName}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Start Time</td><td style="padding: 6px 0; text-align: right; color: #222;">${startTime}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">End Time</td><td style="padding: 6px 0; text-align: right; color: #222;">${endTime}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Duration</td><td style="padding: 6px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Rate</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${rate} per ${rateType}</td></tr>
-            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 10px 0; font-size: 1.1rem; font-weight: bold; color: #1a202c;">Total Amount</td><td style="padding: 10px 0; text-align: right; font-size: 1.1rem; font-weight: bold; color: #16a34a;">₹${amount}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Player</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${userName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Game</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${gameName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;">₹${rate} per ${rateType}</td></tr>
           </tbody>
         </table>
-        <div style="text-align: center; color: #4a5568; font-size: 1rem; margin-top: 18px;">Thank you for playing!<br/>Visit again.</div>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
+        <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
+          <tbody>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            ${extrasRows}
+            ${extrasRows ? `<tr><td style="padding: 6px 0; color: #475569; font-weight: bold;">Extras Total</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: bold;">₹${extrasTotal}</td></tr>` : ''}
+            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
+            <tr><td style="padding: 12px 0; font-size: 1.13rem; font-weight: bold; color: #1e293b;">Grand Total</td><td style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${grandTotal}</td></tr>
+          </tbody>
+        </table>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
+        <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
       </div>
+      </body></html>
     `
 
     const printWindow = window.open("", "_blank")
@@ -339,14 +377,14 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sessions.map((session) => (
+            {filteredSessions.map((session) => (
               <TableRow key={session.id}>
                 <TableCell className="border border-gray-200">{session.users?.name || 'Unknown'}</TableCell>
                 <TableCell className="border border-gray-200">{session.games?.name || 'Unknown'}</TableCell>
                 <TableCell className="border border-gray-200">{new Date(session.start_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</TableCell>
                 <TableCell className="border border-gray-200">{session.end_time ? new Date(session.end_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : 'Ongoing'}</TableCell>
                 <TableCell className="border border-gray-200">{formatDuration(session.start_time, session.end_time)}</TableCell>
-                <TableCell className="border border-gray-200">₹{session.is_active ? getCurrentAmount(session) : calculateAmount(session)}</TableCell>
+                <TableCell className="border border-gray-200">₹{getTotalAmount(session)}</TableCell>
                 <TableCell className="border border-gray-200">{session.is_active ? 'Active' : 'Completed'}</TableCell>
                 <TableCell className="border border-gray-200">
                   <Button variant="outline" size="sm" onClick={() => printBill(session)}>

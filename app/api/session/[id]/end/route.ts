@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/lib/generated/prisma';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function PUT(req: NextRequest) {
   // Extract session ID from the URL
@@ -10,6 +8,15 @@ export async function PUT(req: NextRequest) {
   const sessionId = Number(parts[parts.length - 2]); // [id] is the second to last segment
 
   if (!sessionId) return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
+
+  // Parse extras from body (optional)
+  let extras = [];
+  try {
+    const body = await req.json();
+    extras = Array.isArray(body.extras) ? body.extras : [];
+  } catch (e) {
+    // No body or invalid JSON, ignore
+  }
 
   // Fetch session with game info
   const session = await prisma.session.findUnique({
@@ -28,6 +35,27 @@ export async function PUT(req: NextRequest) {
   } else {
     price = Math.round((durationSec / 1800) * session.game.rate);
   }
+
+  // Handle extras (products)
+  let extrasTotal = 0;
+  let extrasDetails = [];
+  for (const extra of extras) {
+    if (!extra.productId || !extra.quantity || extra.quantity <= 0) continue;
+    const product = await prisma.product.findUnique({ where: { id: extra.productId } });
+    if (!product) continue;
+    const total_price = product.price * extra.quantity;
+    extrasTotal += total_price;
+    extrasDetails.push({ name: product.name, price: product.price, quantity: extra.quantity, total: total_price });
+    await prisma.sessionProduct.create({
+      data: {
+        session_id: sessionId,
+        product_id: product.id,
+        quantity: extra.quantity,
+        total_price,
+      },
+    });
+  }
+
   // Use session.game_name, session.game_rate, session.game_rate_type for billDetails
   const billDetails = {
     user: session.user.name,
@@ -38,6 +66,9 @@ export async function PUT(req: NextRequest) {
     rate: session.game_rate,
     rate_type: session.game_rate_type,
     price,
+    extras: extrasDetails,
+    extrasTotal,
+    total: price + extrasTotal,
   };
 
   const updated = await prisma.session.update({
@@ -45,7 +76,7 @@ export async function PUT(req: NextRequest) {
     data: {
       end_time: end,
       is_active: false,
-      bill_amount: price,
+      bill_amount: price + extrasTotal,
       bill_details: JSON.stringify(billDetails),
     },
   });

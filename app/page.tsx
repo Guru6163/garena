@@ -9,6 +9,9 @@ import { UserManagement } from "@/components/user-management"
 import { SessionManagement } from "@/components/session-management"
 import { OngoingSessions } from "@/components/ongoing-sessions"
 import { SessionLogs } from "@/components/session-logs"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts"
+import { ProductManagement } from "@/components/product-management"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -46,7 +49,21 @@ export default function HomePage() {
   const activeSessions = sessions.filter((session) => session.is_active)
   const completedSessions = sessions.filter((session) => !session.is_active)
 
-  const totalRevenue = completedSessions.reduce((sum, session) => {
+  function isToday(dateString: string) {
+    const date = new Date(dateString)
+    const today = new Date()
+    return (
+      date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear()
+    )
+  }
+
+  const todaysCompletedSessions = completedSessions.filter(
+    (session) => session.end_time && isToday(session.end_time)
+  )
+
+  const totalRevenue = todaysCompletedSessions.reduce((sum, session) => {
     return sum + calculateAmount(session)
   }, 0)
 
@@ -75,6 +92,45 @@ export default function HomePage() {
 
     return Math.round(durationMinutes * ratePerMinute)
   }
+
+  // Helper to format date as YYYY-MM-DD
+  function formatDate(date: Date) {
+    return date.toISOString().slice(0, 10)
+  }
+
+  // Prepare daily revenue data for current month and last 30 days
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const last30Days = new Date(now)
+  last30Days.setDate(now.getDate() - 29)
+
+  // Group completed sessions by day
+  const dailyRevenueMap: Record<string, number> = {}
+  completedSessions.forEach((session) => {
+    if (session.end_time) {
+      const day = formatDate(new Date(session.end_time))
+      dailyRevenueMap[day] = (dailyRevenueMap[day] || 0) + calculateAmount(session)
+    }
+  })
+
+  // Data for current month
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const monthData = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = new Date(now.getFullYear(), now.getMonth(), i + 1)
+    const key = formatDate(day)
+    return { date: key, revenue: dailyRevenueMap[key] || 0 }
+  })
+
+  // Data for last 30 days
+  const last30Data = Array.from({ length: 30 }, (_, i) => {
+    const day = new Date(last30Days)
+    day.setDate(last30Days.getDate() + i)
+    const key = formatDate(day)
+    return { date: key, revenue: dailyRevenueMap[key] || 0 }
+  })
+
+  // Calculate total revenue for the current month
+  const totalRevenueThisMonth = monthData.reduce((sum, day) => sum + day.revenue, 0)
 
   if (loading) {
     return (
@@ -113,55 +169,126 @@ export default function HomePage() {
           <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => setActiveTab("logs")}>
             Session Logs
           </Button>
+          <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}>
+            Extras
+          </Button>
         </div>
 
         {/* Dashboard */}
         {activeTab === "dashboard" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{users.filter((u) => u.is_active).length}</div>
-                <p className="text-xs text-muted-foreground">Active users</p>
-              </CardContent>
-            </Card>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{users.filter((u) => u.is_active).length}</div>
+                  <p className="text-xs text-muted-foreground">Active users</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Games</CardTitle>
-                <GamepadIcon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{games.filter((g) => g.is_active).length}</div>
-                <p className="text-xs text-muted-foreground">Active games available</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Games</CardTitle>
+                  <GamepadIcon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{games.filter((g) => g.is_active).length}</div>
+                  <p className="text-xs text-muted-foreground">Active games available</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{activeSessions.length}</div>
-                <p className="text-xs text-muted-foreground">Currently playing</p>
-              </CardContent>
-            </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{activeSessions.length}</div>
+                  <p className="text-xs text-muted-foreground">Currently playing</p>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
-                <Plus className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₹{totalRevenue}</div>
-                <p className="text-xs text-muted-foreground">From completed sessions</p>
-              </CardContent>
-            </Card>
-          </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Today's Revenue</CardTitle>
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">₹{totalRevenue}</div>
+                  <p className="text-xs text-muted-foreground">From completed sessions</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Revenue This Month</CardTitle>
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">₹{totalRevenueThisMonth}</div>
+                  <p className="text-xs text-muted-foreground">All completed sessions this month</p>
+                </CardContent>
+              </Card>
+            </div>
+            {/* Revenue Charts */}
+            <div className="flex flex-col gap-6 mb-8">
+              <Card className="@container/card">
+                <CardHeader>
+                  <CardTitle>Revenue This Month</CardTitle>
+                  <p className="text-muted-foreground text-xs">Daily revenue for {now.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+                </CardHeader>
+                <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+                  <ChartContainer config={{ revenue: { label: "Revenue", color: "var(--primary)" } }} className="aspect-auto h-[250px] w-full">
+                    <AreaChart data={monthData} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="fillRevenueMonth" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} />
+                      <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} tickFormatter={(value) => {
+                        const date = new Date(value)
+                        return date.getDate().toString()
+                      }} />
+                      <YAxis domain={[0, 'auto']} tickLine={false} axisLine={false} tickMargin={8} />
+                      <ChartTooltip cursor={false} content={<ChartTooltipContent labelFormatter={(value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" })} indicator="dot" />} />
+                      <Area dataKey="revenue" type="monotone" fill="url(#fillRevenueMonth)" stroke="var(--primary)" />
+                    </AreaChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+              <Card className="@container/card">
+                <CardHeader>
+                  <CardTitle>Revenue Last 30 Days</CardTitle>
+                  <p className="text-muted-foreground text-xs">Daily revenue for the last 30 days</p>
+                </CardHeader>
+                <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+                  <ChartContainer config={{ revenue: { label: "Revenue", color: "var(--primary)" } }} className="aspect-auto h-[250px] w-full">
+                    <AreaChart data={last30Data} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="fillRevenue30" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8} />
+                          <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.1} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} />
+                      <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} tickFormatter={(value) => {
+                        const date = new Date(value)
+                        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                      }} />
+                      <YAxis domain={[0, 'auto']} tickLine={false} axisLine={false} tickMargin={8} />
+                      <ChartTooltip cursor={false} content={<ChartTooltipContent labelFormatter={(value) => new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" })} indicator="dot" />} />
+                      <Area dataKey="revenue" type="monotone" fill="url(#fillRevenue30)" stroke="var(--primary)" />
+                    </AreaChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </>
         )}
 
         {/* Content based on active tab */}
@@ -180,6 +307,7 @@ export default function HomePage() {
         {activeTab === "logs" && (
           <SessionLogs games={games} users={users} calculateAmount={calculateAmount} />
         )}
+        {activeTab === "extras" && <ProductManagement />}
       </div>
     </div>
   )

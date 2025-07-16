@@ -43,12 +43,21 @@ export function SessionManagement({
   const [playerName, setPlayerName] = useState("")
   const [loading, setLoading] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [products, setProducts] = useState<any[]>([])
+  const [extrasModalSession, setExtrasModalSession] = useState<any>(null)
+  const [selectedProductId, setSelectedProductId] = useState<string>("")
+  const [extras, setExtras] = useState<{ productId: number, name: string, price: number, quantity: number }[]>([])
+  const [extrasLoading, setExtrasLoading] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
     }, 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/product').then(res => res.json()).then(setProducts)
   }, [])
 
   const handleStartSession = async () => {
@@ -81,6 +90,43 @@ export function SessionManagement({
     } finally {
       setLoading(false)
     }
+  }
+
+  const openExtrasModal = (session: any) => {
+    setExtrasModalSession(session)
+    setExtras([])
+    setSelectedProductId("")
+  }
+
+  const handleAddExtra = () => {
+    if (!selectedProductId) return
+    const product = products.find((p: any) => p.id === Number(selectedProductId))
+    if (!product) return
+    if (extras.some(e => e.productId === product.id)) return // prevent duplicates
+    setExtras([...extras, { productId: product.id, name: product.name, price: product.price, quantity: 1 }])
+    setSelectedProductId("")
+  }
+
+  const handleExtrasChange = (productId: number, quantity: number) => {
+    setExtras((prev) => prev.map((e) => e.productId === productId ? { ...e, quantity: Math.max(1, quantity) } : e))
+  }
+
+  const handleRemoveExtra = (productId: number) => {
+    setExtras((prev) => prev.filter((e) => e.productId !== productId))
+  }
+
+  const handleEndSessionWithExtras = async () => {
+    if (!extrasModalSession) return
+    setExtrasLoading(true)
+    const selectedExtras = extras.map(e => ({ productId: e.productId, quantity: e.quantity }))
+    await fetch(`/api/session/${extrasModalSession.id}/end`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extras: selectedExtras }),
+    })
+    setExtrasLoading(false)
+    closeExtrasModal()
+    onDataChange()
   }
 
   const handleEndSession = async (sessionId: number) => {
@@ -135,6 +181,23 @@ export function SessionManagement({
     const rate = session.games?.rate
     const rateType = session.games?.rate_type === '30min' ? '30 minutes' : 'hour'
 
+    // Parse bill details for extras
+    let extrasRows = ''
+    let extrasTotal = 0
+    let grandTotal = amount
+    if (session.bill_details) {
+      try {
+        const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
+        if (details.extras && Array.isArray(details.extras) && details.extras.length > 0) {
+          extrasRows = details.extras.map((extra: any) =>
+            `<tr><td style=\"padding: 6px 0; color: #555;\">${extra.name} x${extra.quantity}</td><td style=\"padding: 6px 0; text-align: right; color: #222;\">₹${extra.price} x ${extra.quantity} = ₹${extra.total}</td></tr>`
+          ).join('')
+          extrasTotal = details.extrasTotal || details.extras.reduce((sum: number, e: any) => sum + (e.total || 0), 0)
+          grandTotal = (details.total || (amount + extrasTotal))
+        }
+      } catch {}
+    }
+
     const billContent = `
       <div style="max-width: 400px; margin: 40px auto; border: 2px solid #222; border-radius: 16px; padding: 32px 24px; font-family: 'Segoe UI', Arial, sans-serif; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
         <h2 style="text-align: center; font-size: 2rem; font-weight: bold; margin-bottom: 8px; letter-spacing: 2px; color: #1a202c;">GARENA GAMES</h2>
@@ -148,7 +211,11 @@ export function SessionManagement({
             <tr><td style="padding: 6px 0; color: #555;">Duration</td><td style="padding: 6px 0; text-align: right; color: #222;">${duration}</td></tr>
             <tr><td style="padding: 6px 0; color: #555;">Rate</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${rate} per ${rateType}</td></tr>
             <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 10px 0; font-size: 1.1rem; font-weight: bold; color: #1a202c;">Total Amount</td><td style="padding: 10px 0; text-align: right; font-size: 1.1rem; font-weight: bold; color: #16a34a;">₹${amount}</td></tr>
+            <tr><td style="padding: 6px 0; color: #555;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            ${extrasRows}
+            ${extrasRows ? `<tr><td style=\"padding: 6px 0; color: #555; font-weight: bold;\">Extras Total</td><td style=\"padding: 6px 0; text-align: right; color: #222; font-weight: bold;\">₹${extrasTotal}</td></tr>` : ''}
+            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
+            <tr><td style="padding: 10px 0; font-size: 1.1rem; font-weight: bold; color: #1a202c;">Grand Total</td><td style="padding: 10px 0; text-align: right; font-size: 1.1rem; font-weight: bold; color: #16a34a;">₹${grandTotal}</td></tr>
           </tbody>
         </table>
         <div style="text-align: center; color: #4a5568; font-size: 1rem; margin-top: 18px;">Thank you for playing!<br/>Visit again.</div>
@@ -161,6 +228,12 @@ export function SessionManagement({
       printWindow.document.close()
       printWindow.print()
     }
+  }
+
+  const closeExtrasModal = () => {
+    setExtrasModalSession(null)
+    setExtras([])
+    setSelectedProductId("")
   }
 
   // Only show ongoing sessions
@@ -272,7 +345,7 @@ export function SessionManagement({
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleEndSession(session.id)}
+                    onClick={() => openExtrasModal(session)}
                     disabled={loading}
                   >
                     <Square className="h-4 w-4 mr-2" />
@@ -289,6 +362,52 @@ export function SessionManagement({
           </Card>
         ))}
       </div>
+
+      {/* Extras Modal */}
+      <Dialog open={!!extrasModalSession} onOpenChange={closeExtrasModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Extras (Drinks/Snacks)</DialogTitle>
+            <DialogDescription>Add products to the bill. Adjust quantity or remove as needed.</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mb-2">
+            <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select product" />
+              </SelectTrigger>
+              <SelectContent>
+                {products.filter(p => !extras.some(e => e.productId === p.id)).map(product => (
+                  <SelectItem key={product.id} value={product.id.toString()}>{product.name} (₹{product.price})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handleAddExtra} disabled={!selectedProductId}>Add</Button>
+          </div>
+          <div className="space-y-2">
+            {extras.length === 0 && <div className="text-gray-500">No products added.</div>}
+            {extras.map((extra) => (
+              <div key={extra.productId} className="flex items-center gap-2">
+                <span className="w-32">{extra.name}</span>
+                <span className="w-16">₹{extra.price}</span>
+                <Input
+                  type="number"
+                  min={1}
+                  value={extra.quantity}
+                  onChange={e => handleExtrasChange(extra.productId, Number(e.target.value))}
+                  className="w-20"
+                />
+                <Button variant="destructive" size="sm" onClick={() => handleRemoveExtra(extra.productId)}>Remove</Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={handleEndSessionWithExtras} disabled={extrasLoading}>
+              {extrasLoading ? "Saving..." : "End Session & Add Extras"}
+            </Button>
+            <Button variant="outline" onClick={closeExtrasModal} disabled={extrasLoading}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
