@@ -17,6 +17,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+// import { saveAs } from "file-saver"
 
 interface UserManagementProps {
   users: any[] // Changed from User[] to any[] as supabase is removed
@@ -113,89 +115,117 @@ export function UserManagement({ users, onDataChange }: UserManagementProps) {
     })
   }
 
+  // vCard export handler
+  const handleExportVCF = () => {
+    if (!users || users.length === 0) return
+    let vcf = ""
+    users.forEach((user) => {
+      vcf += "BEGIN:VCARD\n"
+      vcf += "VERSION:3.0\n"
+      vcf += `FN:${user.name ? user.name + ' turf' : 'Unknown turf'}\n`
+      if (user.phone) vcf += `TEL;TYPE=CELL:${user.phone}\n`
+      if (user.email) vcf += `EMAIL:${user.email}\n`
+      vcf += "END:VCARD\n"
+    })
+    // Create a blob and trigger download
+    const blob = new Blob([vcf], { type: "text/vcard;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = "users.vcf"
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => {
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }, 0)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">User Management</h2>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>Create a new user account</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Full Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Enter full name"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="Enter phone number"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleAddUser} disabled={loading}>
-                {loading ? "Adding..." : "Add User"}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportVCF}>
+            Export Users to vCard
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add User
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New User</DialogTitle>
+                <DialogDescription>Create a new user account</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">Full Name *</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Enter full name"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="Enter phone number"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleAddUser} disabled={loading}>
+                  {loading ? "Adding..." : "Add User"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {users.map((user) => (
-          <Card key={user.id} className={`${!user.is_active ? "opacity-60" : ""}`}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{user.name}</CardTitle>
-                  <CardDescription className="space-y-1">
-                    {user.phone && (
-                      <div className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        <span className="text-xs">{user.phone}</span>
-                      </div>
-                    )}
-                    {user.email && (
-                      <div className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        <span className="text-xs">{user.email}</span>
-                      </div>
-                    )}
-                  </CardDescription>
-                </div>
-                <Badge variant={user.is_active ? "default" : "secondary"}>
-                  {user.is_active ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => startEdit(user)} disabled={loading}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button onClick={() => handleDeactivateUser(user.id)} disabled={loading} variant="outline" size="sm">Deactivate</Button>
-                <Button onClick={() => handleDeleteUser(user.id)} disabled={loading} variant="destructive" size="sm">Delete</Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* User Table */}
+      <div className="overflow-x-auto w-full px-0">
+        <Table className="w-full min-w-full">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
+                <TableCell className="min-w-full">{user.name}</TableCell>
+                <TableCell className="min-w-full">{user.phone || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="min-w-full">{user.email || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="min-w-full">
+                  <Badge variant={user.is_active ? "default" : "secondary"}>
+                    {user.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="min-w-full">
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => startEdit(user)} disabled={loading}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button onClick={() => handleDeleteUser(user.id)} disabled={loading} variant="destructive" size="sm">Delete</Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       {/* Edit Dialog */}
