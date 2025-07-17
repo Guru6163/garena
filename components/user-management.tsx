@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,89 +23,97 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 interface UserManagementProps {
   users: any[] // Changed from User[] to any[] as supabase is removed
   onDataChange: () => void
+  storageMode: string
 }
 
-export function UserManagement({ users, onDataChange }: UserManagementProps) {
+export function UserManagement({ users, onDataChange, storageMode }: UserManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<any | null>(null) // Changed from User to any
   const [formData, setFormData] = useState({ name: "", phone: "" })
   const [loading, setLoading] = useState(false)
 
-  const handleAddUser = async () => {
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const stored = localStorage.getItem("users")
+      if (stored) {
+        setLocalUsers(JSON.parse(stored))
+      } else {
+        setLocalUsers([])
+      }
+    }
+  }, [storageMode])
+
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const handler = (e: StorageEvent) => {
+        if (e.key === "users") {
+          setLocalUsers(e.newValue ? JSON.parse(e.newValue) : [])
+        }
+      }
+      window.addEventListener("storage", handler)
+      return () => window.removeEventListener("storage", handler)
+    }
+  }, [storageMode])
+
+  const [localUsers, setLocalUsers] = useState<any[]>([])
+  const displayUsers = storageMode === "ls" ? localUsers : users
+
+  const saveUsersLS = (newUsers: any[]) => {
+    localStorage.setItem("users", JSON.stringify(newUsers))
+    setLocalUsers(newUsers)
+    onDataChange()
+  }
+
+  // Add back handleAddUser for LS-only mode
+  const handleAddUser = () => {
     if (!formData.name) return
-
-    try {
-      setLoading(true)
-      const res = await fetch('/api/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name, phone: formData.phone || undefined }),
-      })
-      if (!res.ok) throw new Error('Failed to add user')
-      toast.success('User added successfully!')
-      setFormData({ name: '', phone: '' })
-      setIsAddDialogOpen(false)
-      onDataChange()
-    } catch (error) {
-      toast.error('Error adding user')
-      console.error('Error adding user:', error)
-    } finally {
-      setLoading(false)
-    }
+    const newUser = { id: Date.now(), name: formData.name, phone: formData.phone, is_active: true }
+    const newUsers = [...(localUsers || []), newUser]
+    saveUsersLS(newUsers)
+    setFormData({ name: '', phone: '' })
+    setIsAddDialogOpen(false)
+    toast.success('User added successfully!')
   }
 
-  const handleEditUser = async () => {
+  // Add back handleEditUser for LS-only mode
+  const handleEditUser = () => {
     if (!editingUser || !formData.name) return
-
-    try {
-      setLoading(true)
-      const res = await fetch('/api/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name, phone: formData.phone || undefined }),
-      })
-      if (!res.ok) throw new Error('Failed to update user')
-      toast.success('User updated successfully!')
-      setEditingUser(null)
-      setFormData({ name: '', phone: '' })
-      onDataChange()
-    } catch (error) {
-      toast.error('Error updating user')
-      console.error('Error updating user:', error)
-    } finally {
-      setLoading(false)
-    }
+    const newUsers = localUsers.map(u => u.id === editingUser.id ? { ...u, name: formData.name, phone: formData.phone } : u)
+    saveUsersLS(newUsers)
+    setEditingUser(null)
+    setFormData({ name: '', phone: '' })
+    toast.success('User updated successfully!')
   }
 
-  const handleDeleteUser = async (userId: number) => {
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/user?id=${userId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete user')
-      toast.success('User deleted successfully!')
-      onDataChange()
-    } catch (error) {
-      toast.error('Error deleting user')
-      console.error('Error deleting user:', error)
-    } finally {
-      setLoading(false)
-    }
+  // Add back handleDeleteUser for LS-only mode
+  const handleDeleteUser = (userId: number) => {
+    const newUsers = localUsers.filter(u => u.id !== userId)
+    saveUsersLS(newUsers)
+    toast.success('User deleted successfully!')
   }
 
-  const handleDeactivateUser = async (userId: number) => {
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/user?id=${userId}`, { method: 'PATCH' })
-      if (!res.ok) throw new Error('Failed to deactivate user')
-      toast.success('User deactivated!')
-      onDataChange()
-    } catch (error) {
-      toast.error('Error deactivating user')
-      console.error('Error deactivating user:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Commented out DB/API code for LS-only mode
+  // const handleDeactivateUser = async (userId: number) => {
+  //   if (storageMode === "ls") {
+  //     const newUsers = localUsers.map(u => u.id === userId ? { ...u, is_active: false } : u)
+  //     saveUsersLS(newUsers)
+  //     toast.success('User deactivated!')
+  //     return
+  //   }
+
+  //   try {
+  //     setLoading(true)
+  //     const res = await fetch(`/api/user?id=${userId}`, { method: 'PATCH' })
+  //     if (!res.ok) throw new Error('Failed to deactivate user')
+  //     toast.success('User deactivated!')
+  //     onDataChange()
+  //   } catch (error) {
+  //     toast.error('Error deactivating user')
+  //     console.error('Error deactivating user:', error)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   const startEdit = (user: any) => { // Changed from User to any
     setEditingUser(user)
@@ -117,9 +125,9 @@ export function UserManagement({ users, onDataChange }: UserManagementProps) {
 
   // vCard export handler
   const handleExportVCF = () => {
-    if (!users || users.length === 0) return
+    if (!displayUsers || displayUsers.length === 0) return
     let vcf = ""
-    users.forEach((user) => {
+    displayUsers.forEach((user) => {
       vcf += "BEGIN:VCARD\n"
       vcf += "VERSION:3.0\n"
       vcf += `FN:${user.name ? user.name + ' turf' : 'Unknown turf'}\n`
@@ -204,7 +212,7 @@ export function UserManagement({ users, onDataChange }: UserManagementProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
+            {displayUsers.map((user) => (
               <TableRow key={user.id} className={!user.is_active ? "opacity-60" : ""}>
                 <TableCell className="w-1/5">{user.name}</TableCell>
                 <TableCell className="w-1/5">{user.phone || <span className="text-muted-foreground">—</span>}</TableCell>

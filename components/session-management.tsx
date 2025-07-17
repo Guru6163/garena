@@ -27,6 +27,7 @@ interface SessionManagementProps {
   onDataChange: () => void
   calculateAmount: (session: Session) => number
   getCurrentAmount: (session: Session) => number
+  storageMode: string
 }
 
 export function SessionManagement({
@@ -36,6 +37,7 @@ export function SessionManagement({
   onDataChange,
   calculateAmount,
   getCurrentAmount,
+  storageMode,
 }: SessionManagementProps) {
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false)
   const [selectedGameId, setSelectedGameId] = useState("")
@@ -48,6 +50,30 @@ export function SessionManagement({
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [extras, setExtras] = useState<{ productId: number, name: string, price: number, quantity: number }[]>([])
   const [extrasLoading, setExtrasLoading] = useState(false)
+  const [localSessions, setLocalSessions] = useState<any[]>([])
+
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const stored = localStorage.getItem("sessions")
+      if (stored) {
+        setLocalSessions(JSON.parse(stored))
+      } else {
+        setLocalSessions([])
+      }
+    }
+  }, [storageMode])
+
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const handler = (e: StorageEvent) => {
+        if (e.key === "sessions") {
+          setLocalSessions(e.newValue ? JSON.parse(e.newValue) : [])
+        }
+      }
+      window.addEventListener("storage", handler)
+      return () => window.removeEventListener("storage", handler)
+    }
+  }, [storageMode])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,40 +82,50 @@ export function SessionManagement({
     return () => clearInterval(timer)
   }, [])
 
+  // Load products from localStorage for Extras modal
   useEffect(() => {
-    fetch('/api/product').then(res => res.json()).then(setProducts)
+    const stored = localStorage.getItem("products")
+    if (stored) {
+      setProducts(JSON.parse(stored))
+    } else {
+      setProducts([])
+    }
   }, [])
 
-  const handleStartSession = async () => {
-    if (!selectedGameId || !selectedUserId) return
+  // Commented out DB/API code for LS-only mode
+  // useEffect(() => {
+  //   fetch('/api/product').then(res => res.json()).then(setProducts)
+  // }, [])
 
+  const saveSessionsLS = (newSessions: any[]) => {
+    localStorage.setItem("sessions", JSON.stringify(newSessions))
+    setLocalSessions(newSessions)
+    onDataChange()
+  }
+
+  const displaySessions = storageMode === "ls" ? localSessions : sessions
+
+  // Add back handleStartSession for LS-only mode
+  const handleStartSession = () => {
+    if (!selectedGameId || !selectedUserId) return
     const selectedGame = games.find((game) => game.id === Number.parseInt(selectedGameId))
     const selectedUser = users.find((user) => user.id === Number.parseInt(selectedUserId))
     if (!selectedGame || !selectedUser) return
-
-    try {
-      setLoading(true)
-      const res = await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user: selectedUser,
-          game: selectedGame,
-          start_time: new Date().toISOString(),
-        }),
-      })
-      if (!res.ok) throw new Error('Failed to start session')
-      toast.success('Session started successfully!')
-      setSelectedGameId('')
-      setSelectedUserId('')
-      setIsStartDialogOpen(false)
-      onDataChange()
-    } catch (error) {
-      toast.error('Error starting session')
-      console.error('Error starting session:', error)
-    } finally {
-      setLoading(false)
+    const newSession = {
+      id: Date.now(),
+      user_id: selectedUser.id,
+      game_id: selectedGame.id,
+      start_time: new Date().toISOString(),
+      is_active: true,
+      games: selectedGame,
+      users: selectedUser,
     }
+    const newSessions = [...(localSessions || []), newSession]
+    saveSessionsLS(newSessions)
+    setSelectedGameId('')
+    setSelectedUserId('')
+    setIsStartDialogOpen(false)
+    toast.success('Session started successfully!')
   }
 
   const openExtrasModal = (session: any) => {
@@ -115,36 +151,54 @@ export function SessionManagement({
     setExtras((prev) => prev.filter((e) => e.productId !== productId))
   }
 
-  const handleEndSessionWithExtras = async () => {
+  // Add back handleEndSessionWithExtras for LS-only mode
+  const handleEndSessionWithExtras = () => {
     if (!extrasModalSession) return
-    setExtrasLoading(true)
-    const selectedExtras = extras.map(e => ({ productId: e.productId, quantity: e.quantity }))
-    await fetch(`/api/session/${extrasModalSession.id}/end`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ extras: selectedExtras }),
+    // Map extras to include name and price for each extra
+    const selectedExtras = extras.map(e => {
+      const product = products.find((p: any) => p.id === e.productId)
+      return {
+        productId: e.productId,
+        name: product ? product.name : e.name,
+        price: product ? product.price : e.price,
+        quantity: e.quantity
+      }
     })
+    const newSessions = localSessions.map(s => s.id === extrasModalSession.id ? { 
+      ...s, 
+      is_active: false, 
+      end_time: new Date().toISOString(), 
+      extras: selectedExtras 
+    } : s)
+    saveSessionsLS(newSessions)
     setExtrasLoading(false)
     closeExtrasModal()
-    onDataChange()
+    toast.success('Session ended successfully!')
   }
 
-  const handleEndSession = async (sessionId: number) => {
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/session/${sessionId}/end`, {
-        method: 'PUT',
-      })
-      if (!res.ok) throw new Error('Failed to end session')
-      toast.success('Session ended successfully!')
-      onDataChange()
-    } catch (error) {
-      toast.error('Error ending session')
-      console.error('Error ending session:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Commented out DB/API code for LS-only mode
+  // const handleEndSession = async (sessionId: number) => {
+  //   if (storageMode === "ls") {
+  //     const newSessions = localSessions.map(s => s.id === sessionId ? { ...s, is_active: false, end_time: new Date().toISOString() } : s)
+  //     saveSessionsLS(newSessions)
+  //     toast.success('Session ended successfully!')
+  //     return
+  //   }
+  //   try {
+  //     setLoading(true)
+  //     const res = await fetch(`/api/session/${sessionId}/end`, {
+  //       method: 'PUT',
+  //     })
+  //     if (!res.ok) throw new Error('Failed to end session')
+  //     toast.success('Session ended successfully!')
+  //     onDataChange()
+  //   } catch (error) {
+  //     toast.error('Error ending session')
+  //     console.error('Error ending session:', error)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   const formatDuration = (startTime: string, endTime?: string, isActive?: boolean) => {
     const start = new Date(startTime)
@@ -237,7 +291,7 @@ export function SessionManagement({
   }
 
   // Only show ongoing sessions
-  const ongoingSessions = sessions.filter((session) => session.is_active)
+  const ongoingSessions = displaySessions.filter((session) => session.is_active)
 
   return (
     <div className="space-y-6">

@@ -13,6 +13,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ProductManagement } from "@/components/product-management"
 import { CostCalculator } from "@/components/cost-calculator"
+import { Switch } from "@/components/ui/switch"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -20,6 +21,28 @@ export default function HomePage() {
   const [users, setUsers] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [storageMode, setStorageMode] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("storageMode") || "db"
+    }
+    return "db"
+  })
+
+  // Sync storageMode across tabs
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === "storageMode" && e.newValue) {
+        setStorageMode(e.newValue)
+      }
+    }
+    window.addEventListener("storage", handler)
+    return () => window.removeEventListener("storage", handler)
+  }, [])
+
+  // Persist storageMode to localStorage
+  useEffect(() => {
+    localStorage.setItem("storageMode", storageMode)
+  }, [storageMode])
 
   useEffect(() => {
     loadData()
@@ -28,15 +51,12 @@ export default function HomePage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      // Load games
-      const gamesRes = await fetch('/api/game')
-      const gamesData = gamesRes.ok ? await gamesRes.json() : []
-      // Load users
-      const usersRes = await fetch('/api/user')
-      const usersData = usersRes.ok ? await usersRes.json() : []
-      // Load sessions with related data
-      const sessionsRes = await fetch('/api/logs')
-      const sessionsData = sessionsRes.ok ? await sessionsRes.json() : []
+      // Load games from localStorage
+      const gamesData = JSON.parse(localStorage.getItem('games') || '[]')
+      // Load users from localStorage
+      const usersData = JSON.parse(localStorage.getItem('users') || '[]')
+      // Load sessions from localStorage
+      const sessionsData = JSON.parse(localStorage.getItem('sessions') || '[]')
       setGames(gamesData)
       setUsers(usersData)
       setSessions(sessionsData)
@@ -152,9 +172,19 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-6">
+        {/* Storage Mode Toggle */}
+        <div className="flex items-center justify-end mb-4 gap-2">
+          <span className="text-sm font-medium text-gray-700">DB</span>
+          <Switch
+            checked={storageMode === "ls"}
+            onCheckedChange={checked => setStorageMode(checked ? "ls" : "db")}
+            id="storage-mode-switch"
+          />
+          <span className="text-sm font-medium text-gray-700">LocalStorage</span>
+        </div>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Garena Games</h1>
-          <p className="text-gray-600">Cloud-based game center management system</p>
+          <p className="text-gray-600">Local storage based game center management system</p>
         </div>
 
         {/* Navigation */}
@@ -182,6 +212,10 @@ export default function HomePage() {
           <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}> 
             <Package className="h-4 w-4 mr-2" />
             Extras
+          </Button>
+          <Button variant={activeTab === "cost-calculator" ? "default" : "outline"} onClick={() => setActiveTab("cost-calculator")}> 
+            <IndianRupee className="h-4 w-4 mr-2" />
+            Cost Calculator
           </Button>
         </div>
 
@@ -306,8 +340,8 @@ export default function HomePage() {
         )}
 
         {/* Content based on active tab */}
-        {activeTab === "users" && <UserManagement users={users} onDataChange={loadData} />}
-        {activeTab === "games" && <GameManagement games={games} onDataChange={loadData} />}
+        {activeTab === "users" && <UserManagement users={users} onDataChange={loadData} storageMode={storageMode} />}
+        {activeTab === "games" && <GameManagement games={games} onDataChange={loadData} storageMode={storageMode} />}
         {activeTab === "sessions" && (
           <SessionManagement
             games={games}
@@ -316,12 +350,13 @@ export default function HomePage() {
             onDataChange={loadData}
             calculateAmount={calculateAmount}
             getCurrentAmount={getCurrentAmount}
+            storageMode={storageMode}
           />
         )}
         {activeTab === "logs" && (
-          <SessionLogs games={games} users={users} calculateAmount={calculateAmount} />
+          <SessionLogs games={games} users={users} calculateAmount={calculateAmount} storageMode={storageMode} />
         )}
-        {activeTab === "extras" && <ProductManagement />}
+        {activeTab === "extras" && <ProductManagement storageMode={storageMode} />}
       </div>
     </div>
   )

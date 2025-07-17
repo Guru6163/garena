@@ -15,6 +15,7 @@ interface SessionLogsProps {
   games: Game[]
   users: User[]
   calculateAmount: (session: Session) => number
+  storageMode: string
 }
 
 // Utility to format number as Indian Rupee with commas
@@ -22,8 +23,9 @@ function formatINR(amount: number) {
   return amount.toLocaleString('en-IN')
 }
 
-export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps) {
+export function SessionLogs({ games, users, calculateAmount, storageMode }: SessionLogsProps) {
   const [sessions, setSessions] = useState<Session[]>([])
+  const [localSessions, setLocalSessions] = useState<Session[]>([])
   const [filters, setFilters] = useState({
     gameId: "all",
     userId: "all",
@@ -33,25 +35,51 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
   })
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      const params = new URLSearchParams()
-      if (filters.gameId !== "all") params.append("gameId", filters.gameId)
-      if (filters.userId !== "all") params.append("userId", filters.userId)
-      if (filters.dateFrom) params.append("from", filters.dateFrom)
-      if (filters.dateTo) params.append("to", filters.dateTo)
-      if (filters.status !== "all") params.append("status", filters.status)
-      const res = await fetch(`/api/logs?${params.toString()}`)
-      if (res.ok) {
-        const data = await res.json()
-        setSessions(data)
+    if (storageMode === "ls") {
+      const stored = localStorage.getItem("sessions")
+      if (stored) {
+        setLocalSessions(JSON.parse(stored))
+      } else {
+        setLocalSessions([])
       }
     }
-    fetchLogs()
-  }, [filters])
+  }, [storageMode])
+
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const handler = (e: StorageEvent) => {
+        if (e.key === "sessions") {
+          setLocalSessions(e.newValue ? JSON.parse(e.newValue) : [])
+        }
+      }
+      window.addEventListener("storage", handler)
+      return () => window.removeEventListener("storage", handler)
+    }
+  }, [storageMode])
+
+  // Commented out DB/API code for LS-only mode
+  // useEffect(() => {
+  //   const fetchLogs = async () => {
+  //     const params = new URLSearchParams()
+  //     if (filters.gameId !== "all") params.append("gameId", filters.gameId)
+  //     if (filters.userId !== "all") params.append("userId", filters.userId)
+  //     if (filters.dateFrom) params.append("from", filters.dateFrom)
+  //     if (filters.dateTo) params.append("to", filters.dateTo)
+  //     if (filters.status !== "all") params.append("status", filters.status)
+  //     const res = await fetch(`/api/logs?${params.toString()}`)
+  //     if (res.ok) {
+  //       const data = await res.json()
+  //       setSessions(data)
+  //     }
+  //   }
+  //   fetchLogs()
+  // }, [filters])
+
+  const displaySessions = storageMode === "ls" ? localSessions : sessions
 
   const filteredSessions = useMemo(() => {
     // Only show completed (not active) sessions, regardless of filters
-    return sessions
+    return displaySessions
       .filter((session) => !session.is_active)
       .filter((session) => {
         // Game filter
@@ -83,7 +111,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
         return true
       })
-  }, [sessions, filters])
+  }, [displaySessions, filters])
 
   const formatDuration = (startTime: string, endTime?: string) => {
     const start = new Date(startTime)
@@ -112,6 +140,12 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
   // Helper to get total amount including extras
   function getTotalAmount(session: Session) {
+    // Support LS sessions with extras
+    let extrasTotal = 0
+    if (session.extras && Array.isArray(session.extras) && session.extras.length > 0) {
+      extrasTotal = session.extras.reduce((sum: number, e: any) => sum + (e.quantity * (e.price || 0)), 0)
+      return calculateAmount(session) + extrasTotal
+    }
     if (session.bill_details) {
       try {
         const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
@@ -202,11 +236,17 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const rate = session.games?.rate
     const rateType = session.games?.rate_type === '30min' ? '30 minutes' : 'hour'
 
-    // Parse bill details for extras
+    // Parse bill details for extras (support LS sessions)
     let extrasRows = ''
     let extrasTotal = 0
     let grandTotal = amount
-    if (session.bill_details) {
+    if (session.extras && Array.isArray(session.extras) && session.extras.length > 0) {
+      extrasRows = session.extras.map((extra: any) =>
+        `<tr><td style="padding: 6px 0; color: #555;">${extra.name || ''} x${extra.quantity}</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${extra.price || 0} x ${extra.quantity} = ₹${(extra.price || 0) * extra.quantity}</td></tr>`
+      ).join('')
+      extrasTotal = session.extras.reduce((sum: number, e: any) => sum + (e.quantity * (e.price || 0)), 0)
+      grandTotal = amount + extrasTotal
+    } else if (session.bill_details) {
       try {
         const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
         if (details.extras && Array.isArray(details.extras) && details.extras.length > 0) {

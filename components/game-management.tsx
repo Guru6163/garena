@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,9 +23,10 @@ import { toast } from "sonner"
 interface GameManagementProps {
   games: any[] // Changed from Game[] to any[] as supabase is removed
   onDataChange: () => void
+  storageMode: string
 }
 
-export function GameManagement({ games, onDataChange }: GameManagementProps) {
+export function GameManagement({ games, onDataChange, storageMode }: GameManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<any | null>(null) // Changed from Game to any
   const [formData, setFormData] = useState({
@@ -35,96 +36,117 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
   })
   const [loading, setLoading] = useState(false)
 
-  const handleAddGame = async () => {
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const stored = localStorage.getItem("games")
+      if (stored) {
+        setLocalGames(JSON.parse(stored))
+      } else {
+        setLocalGames([])
+      }
+    }
+  }, [storageMode])
+
+  useEffect(() => {
+    if (storageMode === "ls") {
+      const handler = (e: StorageEvent) => {
+        if (e.key === "games") {
+          setLocalGames(e.newValue ? JSON.parse(e.newValue) : [])
+        }
+      }
+      window.addEventListener("storage", handler)
+      return () => window.removeEventListener("storage", handler)
+    }
+  }, [storageMode])
+
+  const [localGames, setLocalGames] = useState<any[]>([])
+  const displayGames = storageMode === "ls" ? localGames : games
+
+  const saveGamesLS = (newGames: any[]) => {
+    localStorage.setItem("games", JSON.stringify(newGames))
+    setLocalGames(newGames)
+    onDataChange()
+  }
+
+  // Add back handleAddGame for LS-only mode
+  const handleAddGame = () => {
     const numericRate = Number(formData.rate.trim())
     if (!formData.name.trim() || Number.isNaN(numericRate) || numericRate <= 0) {
       toast.error('Please enter a positive number for the rate.')
       return
     }
-
-    try {
-      setLoading(true)
-      const res = await fetch('/api/game', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name.trim(), rate: numericRate, rate_type: formData.rateType }),
-      })
-      if (!res.ok) throw new Error('Failed to add game')
-      toast.success('Game added successfully!')
-      setFormData({ name: '', rate: '', rateType: 'hour' })
-      setIsAddDialogOpen(false)
-      onDataChange()
-    } catch (error) {
-      toast.error('Error adding game')
-      console.error('Error adding game:', error)
-    } finally {
-      setLoading(false)
-    }
+    const newGame = { id: Date.now(), name: formData.name.trim(), rate: numericRate, rate_type: formData.rateType, is_active: true }
+    const newGames = [...(localGames || []), newGame]
+    saveGamesLS(newGames)
+    setFormData({ name: '', rate: '', rateType: 'hour' })
+    setIsAddDialogOpen(false)
+    toast.success('Game added successfully!')
   }
 
-  const handleEditGame = async () => {
+  // Add back handleEditGame for LS-only mode
+  const handleEditGame = () => {
     if (!editingGame || !formData.name || !formData.rate) return
-
-    try {
-      setLoading(true)
-      const res = await fetch('/api/game', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingGame.id, name: formData.name, rate: Number.parseInt(formData.rate), rate_type: formData.rateType }),
-      })
-      if (!res.ok) throw new Error('Failed to update game')
-      toast.success('Game updated successfully!')
-      setEditingGame(null)
-      setFormData({ name: '', rate: '', rateType: 'hour' })
-      onDataChange()
-    } catch (error) {
-      toast.error('Error updating game')
-      console.error('Error updating game:', error)
-    } finally {
-      setLoading(false)
-    }
+    const newGames = localGames.map(g => g.id === editingGame.id ? { ...g, name: formData.name, rate: Number(formData.rate), rate_type: formData.rateType } : g)
+    saveGamesLS(newGames)
+    setEditingGame(null)
+    setFormData({ name: '', rate: '', rateType: 'hour' })
+    toast.success('Game updated successfully!')
   }
 
-  const handleDeleteGame = async (gameId: number) => {
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/game?id=${gameId}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const data = await res.json()
-        if (data.error && data.error.includes('sessions exist')) {
-          toast.error('Cannot delete game: sessions exist for this game.')
-          return
-        }
-        throw new Error('Failed to delete game')
-      }
-      toast.success('Game deleted successfully!')
-      onDataChange()
-    } catch (error) {
-      toast.error('Error deleting game')
-      console.error('Error deleting game:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Commented out DB/API code for LS-only mode
+  // const handleDeleteGame = async (gameId: number) => {
+  //   if (storageMode === "ls") {
+  //     const newGames = localGames.filter(g => g.id !== gameId)
+  //     saveGamesLS(newGames)
+  //     toast.success('Game deleted successfully!')
+  //     return
+  //   }
+  //   try {
+  //     setLoading(true)
+  //     const res = await fetch(`/api/game?id=${gameId}`, { method: 'DELETE' })
+  //     if (!res.ok) {
+  //       const data = await res.json()
+  //       if (data.error && data.error.includes('sessions exist')) {
+  //         toast.error('Cannot delete game: sessions exist for this game.')
+  //         return
+  //       }
+  //       throw new Error('Failed to delete game')
+  //     }
+  //     toast.success('Game deleted successfully!')
+  //     onDataChange()
+  //   } catch (error) {
+  //     toast.error('Error deleting game')
+  //     console.error('Error deleting game:', error)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
-  const toggleGameStatus = async (gameId: number, currentStatus: boolean) => {
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/game/${gameId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentStatus }),
-      })
-      if (!res.ok) throw new Error('Failed to update game status')
-      toast.success('Game status updated!')
-      onDataChange()
-    } catch (error) {
-      toast.error('Error updating game status')
-      console.error("Error updating game status:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Commented out DB/API code for LS-only mode
+  // const toggleGameStatus = async (gameId: number, currentStatus: boolean) => {
+  //   if (storageMode === "ls") {
+  //     const newGames = localGames.map(g => g.id === gameId ? { ...g, is_active: !currentStatus } : g)
+  //     saveGamesLS(newGames)
+  //     toast.success('Game status updated!')
+  //     return
+  //   }
+  //   try {
+  //     setLoading(true)
+  //     const res = await fetch(`/api/game/${gameId}/status`, {
+  //       method: 'PUT',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ is_active: !currentStatus }),
+  //     })
+  //     if (!res.ok) throw new Error('Failed to update game status')
+  //     toast.success('Game status updated!')
+  //     onDataChange()
+  //   } catch (error) {
+  //     toast.error('Error updating game status')
+  //     console.error("Error updating game status:", error)
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   const startEdit = (game: any) => { // Changed from Game to any
     setEditingGame(game)
@@ -183,7 +205,7 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {games.map((game) => (
+        {displayGames.map((game) => (
           <Card key={game.id} className={`${!game.is_active ? "opacity-60" : ""}`}>
             <CardHeader>
               <div className="flex justify-between items-start">
