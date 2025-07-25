@@ -114,16 +114,20 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
           </tr>
         </thead>
         <tbody>
-          {displayProducts.map(product => (
-            <tr key={product.id}>
-              <td className="px-4 py-2 border">{product.name}</td>
-              <td className="px-4 py-2 border">₹{product.price}</td>
-              <td className="px-4 py-2 border">
-                <Button size="sm" variant="outline" onClick={() => handleEdit(product)}>Edit</Button>
-                <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id)} className="ml-2">Delete</Button>
-              </td>
-            </tr>
-          ))}
+          {!Array.isArray(displayProducts) ? (
+            <tr><td colSpan={2} className="text-red-500 text-center">Failed to load products.</td></tr>
+          ) : (
+            displayProducts.map(product => (
+              <tr key={product.id}>
+                <td className="px-4 py-2 border">{product.name}</td>
+                <td className="px-4 py-2 border">₹{product.price}</td>
+                <td className="px-4 py-2 border">
+                  <Button size="sm" variant="outline" onClick={() => handleEdit(product)}>Edit</Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id)} className="ml-2">Delete</Button>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>

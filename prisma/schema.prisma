@@ -65,7 +65,7 @@ model Session {
 }
 
 model Product {
-  id         Int      @id @default(autoincrement())
+  id         String   @id @default(uuid())
   name       String   @unique
   price      Int      // price per unit
   is_active  Boolean  @default(true)
@@ -78,7 +78,7 @@ model SessionProduct {
   session    Session  @relation(fields: [session_id], references: [id])
   session_id Int
   product    Product  @relation(fields: [product_id], references: [id])
-  product_id Int
+  product_id String
   quantity   Int
   total_price Int     // price * quantity (snapshot)
   created_at DateTime @default(now())

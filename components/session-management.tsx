@@ -57,14 +57,15 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
     return () => clearInterval(timer);
   }, []);
 
-  // Load products from localStorage for Extras modal
+  // Load products from API for Extras modal
   useEffect(() => {
-    const stored = localStorage.getItem("products")
-    if (stored) {
-      setProducts(JSON.parse(stored))
-    } else {
-      setProducts([])
-    }
+    fetch('/api/product')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setProducts(data)
+        else setProducts([])
+      })
+      .catch(() => setProducts([]))
   }, [])
 
   // Commented out DB/API code for LS-only mode
@@ -159,7 +160,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
 
   const handleAddExtra = () => {
     if (!selectedProductId) return
-    const product = products.find((p: any) => p.id === Number(selectedProductId))
+    const product = products.find((p: any) => p.id === selectedProductId)
     if (!product) return
     if (extras.some(e => e.productId === product.id)) return // prevent duplicates
     setExtras([...extras, { productId: product.id, name: product.name, price: product.price, quantity: 1 }])
