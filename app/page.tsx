@@ -13,7 +13,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ProductManagement } from "@/components/product-management"
 import { CostCalculator } from "@/components/cost-calculator"
-import { Switch } from "@/components/ui/switch"
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -21,28 +20,6 @@ export default function HomePage() {
   const [users, setUsers] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [storageMode, setStorageMode] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("storageMode") || "db"
-    }
-    return "db"
-  })
-
-  // Sync storageMode across tabs
-  useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === "storageMode" && e.newValue) {
-        setStorageMode(e.newValue)
-      }
-    }
-    window.addEventListener("storage", handler)
-    return () => window.removeEventListener("storage", handler)
-  }, [])
-
-  // Persist storageMode to localStorage
-  useEffect(() => {
-    localStorage.setItem("storageMode", storageMode)
-  }, [storageMode])
 
   useEffect(() => {
     loadData()
@@ -51,12 +28,15 @@ export default function HomePage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      // Load games from localStorage
-      const gamesData = JSON.parse(localStorage.getItem('games') || '[]')
-      // Load users from localStorage
-      const usersData = JSON.parse(localStorage.getItem('users') || '[]')
-      // Load sessions from localStorage
-      const sessionsData = JSON.parse(localStorage.getItem('sessions') || '[]')
+      // Fetch games from API
+      const gamesRes = await fetch("/api/game")
+      const gamesData = await gamesRes.json()
+      // Fetch users from API
+      const usersRes = await fetch("/api/user")
+      const usersData = await usersRes.json()
+      // Fetch sessions from API
+      const sessionsRes = await fetch("/api/session")
+      const sessionsData = await sessionsRes.json()
       setGames(gamesData)
       setUsers(usersData)
       setSessions(sessionsData)
@@ -89,27 +69,27 @@ export default function HomePage() {
   }, 0)
 
   function calculateAmount(session: any) {
-    if (!session.end_time || !session.games) return 0
+    if (!session.end_time || !session.game) return 0
 
     const startTime = new Date(session.start_time)
     const endTime = new Date(session.end_time)
     const durationMs = endTime.getTime() - startTime.getTime()
     const durationMinutes = durationMs / (1000 * 60)
 
-    const ratePerMinute = session.games.rate_type === "hour" ? session.games.rate / 60 : session.games.rate / 30
+    const ratePerMinute = session.game.rate_type === "hour" ? session.game.rate / 60 : session.game.rate / 30
 
     return Math.round(durationMinutes * ratePerMinute)
   }
 
   function getCurrentAmount(session: any) {
-    if (!session.games) return 0
+    if (!session.game) return 0
 
     const startTime = new Date(session.start_time)
     const currentTime = new Date()
     const durationMs = currentTime.getTime() - startTime.getTime()
     const durationMinutes = durationMs / (1000 * 60)
 
-    const ratePerMinute = session.games.rate_type === "hour" ? session.games.rate / 60 : session.games.rate / 30
+    const ratePerMinute = session.game.rate_type === "hour" ? session.game.rate / 60 : session.game.rate / 30
 
     return Math.round(durationMinutes * ratePerMinute)
   }
@@ -172,21 +152,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto p-6">
-        {/* Storage Mode Toggle */}
-        <div className="flex items-center justify-end mb-4 gap-2">
-          <span className="text-sm font-medium text-gray-700">DB</span>
-          <Switch
-            checked={storageMode === "ls"}
-            onCheckedChange={checked => setStorageMode(checked ? "ls" : "db")}
-            id="storage-mode-switch"
-          />
-          <span className="text-sm font-medium text-gray-700">LocalStorage</span>
-        </div>
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Garena Games</h1>
-          <p className="text-gray-600">Local storage based game center management system</p>
-        </div>
-
+        {/* App Name Header */}
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Garena Games</h1>
         {/* Navigation */}
         <div className="flex gap-2 mb-6 flex-wrap">
           <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => setActiveTab("dashboard")}> 
@@ -340,8 +307,8 @@ export default function HomePage() {
         )}
 
         {/* Content based on active tab */}
-        {activeTab === "users" && <UserManagement users={users} onDataChange={loadData} storageMode={storageMode} />}
-        {activeTab === "games" && <GameManagement games={games} onDataChange={loadData} storageMode={storageMode} />}
+        {activeTab === "users" && <UserManagement users={users} onDataChange={loadData} />}
+        {activeTab === "games" && <GameManagement games={games} onDataChange={loadData} />}
         {activeTab === "sessions" && (
           <SessionManagement
             games={games}
@@ -350,13 +317,12 @@ export default function HomePage() {
             onDataChange={loadData}
             calculateAmount={calculateAmount}
             getCurrentAmount={getCurrentAmount}
-            storageMode={storageMode}
           />
         )}
         {activeTab === "logs" && (
-          <SessionLogs games={games} users={users} calculateAmount={calculateAmount} storageMode={storageMode} />
+          <SessionLogs games={games} users={users} calculateAmount={calculateAmount} />
         )}
-        {activeTab === "extras" && <ProductManagement storageMode={storageMode} />}
+        {activeTab === "extras" && <ProductManagement />}
       </div>
     </div>
   )

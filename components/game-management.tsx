@@ -20,13 +20,12 @@ import {
 
 import { toast } from "sonner"
 
-interface GameManagementProps {
-  games: any[] // Changed from Game[] to any[] as supabase is removed
+type GameManagementProps = {
+  games: any[]
   onDataChange: () => void
-  storageMode: string
 }
 
-export function GameManagement({ games, onDataChange, storageMode }: GameManagementProps) {
+export function GameManagement({ games, onDataChange }: GameManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<any | null>(null) // Changed from Game to any
   const [formData, setFormData] = useState({
@@ -36,61 +35,55 @@ export function GameManagement({ games, onDataChange, storageMode }: GameManagem
   })
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const stored = localStorage.getItem("games")
-      if (stored) {
-        setLocalGames(JSON.parse(stored))
-      } else {
-        setLocalGames([])
-      }
+  // Add game via API
+  const handleAddGame = async () => {
+    if (!formData.name || !formData.rate) return
+    setLoading(true)
+    try {
+      await fetch('/api/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: formData.name.trim(), rate: Number(formData.rate), rate_type: formData.rateType })
+      })
+      setFormData({ name: '', rate: '', rateType: 'hour' })
+      setIsAddDialogOpen(false)
+      onDataChange()
+    } finally {
+      setLoading(false)
     }
-  }, [storageMode])
-
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const handler = (e: StorageEvent) => {
-        if (e.key === "games") {
-          setLocalGames(e.newValue ? JSON.parse(e.newValue) : [])
-        }
-      }
-      window.addEventListener("storage", handler)
-      return () => window.removeEventListener("storage", handler)
-    }
-  }, [storageMode])
-
-  const [localGames, setLocalGames] = useState<any[]>([])
-  const displayGames = storageMode === "ls" ? localGames : games
-
-  const saveGamesLS = (newGames: any[]) => {
-    localStorage.setItem("games", JSON.stringify(newGames))
-    setLocalGames(newGames)
-    onDataChange()
   }
 
-  // Add back handleAddGame for LS-only mode
-  const handleAddGame = () => {
-    const numericRate = Number(formData.rate.trim())
-    if (!formData.name.trim() || Number.isNaN(numericRate) || numericRate <= 0) {
-      toast.error('Please enter a positive number for the rate.')
-      return
-    }
-    const newGame = { id: Date.now(), name: formData.name.trim(), rate: numericRate, rate_type: formData.rateType, is_active: true }
-    const newGames = [...(localGames || []), newGame]
-    saveGamesLS(newGames)
-    setFormData({ name: '', rate: '', rateType: 'hour' })
-    setIsAddDialogOpen(false)
-    toast.success('Game added successfully!')
-  }
-
-  // Add back handleEditGame for LS-only mode
-  const handleEditGame = () => {
+  // Edit game via API
+  const handleEditGame = async () => {
     if (!editingGame || !formData.name || !formData.rate) return
-    const newGames = localGames.map(g => g.id === editingGame.id ? { ...g, name: formData.name, rate: Number(formData.rate), rate_type: formData.rateType } : g)
-    saveGamesLS(newGames)
-    setEditingGame(null)
-    setFormData({ name: '', rate: '', rateType: 'hour' })
-    toast.success('Game updated successfully!')
+    setLoading(true)
+    try {
+      await fetch('/api/game', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingGame.id, name: formData.name, rate: Number(formData.rate), rate_type: formData.rateType })
+      })
+      setEditingGame(null)
+      setFormData({ name: '', rate: '', rateType: 'hour' })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Delete game via API
+  const handleDeleteGame = async (gameId: number) => {
+    setLoading(true)
+    try {
+      await fetch('/api/game', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: gameId })
+      })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Commented out DB/API code for LS-only mode
@@ -205,7 +198,7 @@ export function GameManagement({ games, onDataChange, storageMode }: GameManagem
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {displayGames.map((game) => (
+        {games.map((game) => (
           <Card key={game.id} className={`${!game.is_active ? "opacity-60" : ""}`}>
             <CardHeader>
               <div className="flex justify-between items-start">

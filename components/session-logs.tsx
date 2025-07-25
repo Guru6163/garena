@@ -15,7 +15,6 @@ interface SessionLogsProps {
   games: Game[]
   users: User[]
   calculateAmount: (session: Session) => number
-  storageMode: string
 }
 
 // Utility to format number as Indian Rupee with commas
@@ -23,9 +22,8 @@ function formatINR(amount: number) {
   return amount.toLocaleString('en-IN')
 }
 
-export function SessionLogs({ games, users, calculateAmount, storageMode }: SessionLogsProps) {
+export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps) {
   const [sessions, setSessions] = useState<Session[]>([])
-  const [localSessions, setLocalSessions] = useState<Session[]>([])
   const [filters, setFilters] = useState({
     gameId: "all",
     userId: "all",
@@ -35,47 +33,23 @@ export function SessionLogs({ games, users, calculateAmount, storageMode }: Sess
   })
 
   useEffect(() => {
-    if (storageMode === "ls") {
-      const stored = localStorage.getItem("sessions")
-      if (stored) {
-        setLocalSessions(JSON.parse(stored))
-      } else {
-        setLocalSessions([])
+    const fetchLogs = async () => {
+      const params = new URLSearchParams()
+      if (filters.gameId !== "all") params.append("gameId", filters.gameId)
+      if (filters.userId !== "all") params.append("userId", filters.userId)
+      if (filters.dateFrom) params.append("from", filters.dateFrom)
+      if (filters.dateTo) params.append("to", filters.dateTo)
+      if (filters.status !== "all") params.append("status", filters.status)
+      const res = await fetch(`/api/logs?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSessions(data)
       }
     }
-  }, [storageMode])
+    fetchLogs()
+  }, [filters])
 
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const handler = (e: StorageEvent) => {
-        if (e.key === "sessions") {
-          setLocalSessions(e.newValue ? JSON.parse(e.newValue) : [])
-        }
-      }
-      window.addEventListener("storage", handler)
-      return () => window.removeEventListener("storage", handler)
-    }
-  }, [storageMode])
-
-  // Commented out DB/API code for LS-only mode
-  // useEffect(() => {
-  //   const fetchLogs = async () => {
-  //     const params = new URLSearchParams()
-  //     if (filters.gameId !== "all") params.append("gameId", filters.gameId)
-  //     if (filters.userId !== "all") params.append("userId", filters.userId)
-  //     if (filters.dateFrom) params.append("from", filters.dateFrom)
-  //     if (filters.dateTo) params.append("to", filters.dateTo)
-  //     if (filters.status !== "all") params.append("status", filters.status)
-  //     const res = await fetch(`/api/logs?${params.toString()}`)
-  //     if (res.ok) {
-  //       const data = await res.json()
-  //       setSessions(data)
-  //     }
-  //   }
-  //   fetchLogs()
-  // }, [filters])
-
-  const displaySessions = storageMode === "ls" ? localSessions : sessions
+  const displaySessions = sessions
 
   const filteredSessions = useMemo(() => {
     // Only show completed (not active) sessions, regardless of filters

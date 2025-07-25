@@ -40,4 +40,15 @@ export async function POST(req: NextRequest) {
     include: { user: true, game: true },
   });
   return NextResponse.json(session);
+}
+
+export async function GET() {
+  const sessions = await prisma.session.findMany({
+    include: {
+      user: true,
+      game: true,
+    },
+    orderBy: { start_time: 'desc' },
+  });
+  return NextResponse.json(sessions);
 } 

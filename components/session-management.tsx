@@ -27,18 +27,9 @@ interface SessionManagementProps {
   onDataChange: () => void
   calculateAmount: (session: Session) => number
   getCurrentAmount: (session: Session) => number
-  storageMode: string
 }
 
-export function SessionManagement({
-  games,
-  users,
-  sessions,
-  onDataChange,
-  calculateAmount,
-  getCurrentAmount,
-  storageMode,
-}: SessionManagementProps) {
+export function SessionManagement({ games, users, sessions, onDataChange, calculateAmount, getCurrentAmount }: SessionManagementProps) {
   const [isStartDialogOpen, setIsStartDialogOpen] = useState(false)
   const [selectedGameId, setSelectedGameId] = useState("")
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -50,30 +41,6 @@ export function SessionManagement({
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [extras, setExtras] = useState<{ productId: number, name: string, price: number, quantity: number }[]>([])
   const [extrasLoading, setExtrasLoading] = useState(false)
-  const [localSessions, setLocalSessions] = useState<any[]>([])
-
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const stored = localStorage.getItem("sessions")
-      if (stored) {
-        setLocalSessions(JSON.parse(stored))
-      } else {
-        setLocalSessions([])
-      }
-    }
-  }, [storageMode])
-
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const handler = (e: StorageEvent) => {
-        if (e.key === "sessions") {
-          setLocalSessions(e.newValue ? JSON.parse(e.newValue) : [])
-        }
-      }
-      window.addEventListener("storage", handler)
-      return () => window.removeEventListener("storage", handler)
-    }
-  }, [storageMode])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -99,33 +66,56 @@ export function SessionManagement({
 
   const saveSessionsLS = (newSessions: any[]) => {
     localStorage.setItem("sessions", JSON.stringify(newSessions))
-    setLocalSessions(newSessions)
+    // setLocalSessions(newSessions) // This line is removed as per the new_code
     onDataChange()
   }
 
-  const displaySessions = storageMode === "ls" ? localSessions : sessions
+  const displaySessions = sessions
 
-  // Add back handleStartSession for LS-only mode
-  const handleStartSession = () => {
-    if (!selectedGameId || !selectedUserId) return
-    const selectedGame = games.find((game) => game.id === Number.parseInt(selectedGameId))
-    const selectedUser = users.find((user) => user.id === Number.parseInt(selectedUserId))
-    if (!selectedGame || !selectedUser) return
-    const newSession = {
-      id: Date.now(),
-      user_id: selectedUser.id,
-      game_id: selectedGame.id,
-      start_time: new Date().toISOString(),
-      is_active: true,
-      games: selectedGame,
-      users: selectedUser,
+  // Start session via API
+  const handleStartSession = async (sessionData: any) => {
+    setLoading(true)
+    try {
+      await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionData)
+      })
+      setIsStartDialogOpen(false)
+      onDataChange()
+    } finally {
+      setLoading(false)
     }
-    const newSessions = [...(localSessions || []), newSession]
-    saveSessionsLS(newSessions)
-    setSelectedGameId('')
-    setSelectedUserId('')
-    setIsStartDialogOpen(false)
-    toast.success('Session started successfully!')
+  }
+
+  // End session via API
+  const handleEndSession = async (sessionId: number, endData: any) => {
+    setLoading(true)
+    try {
+      await fetch(`/api/session/${sessionId}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(endData)
+      })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Delete session via API
+  const handleDeleteSession = async (sessionId: number) => {
+    setLoading(true)
+    try {
+      await fetch('/api/session', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sessionId })
+      })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openExtrasModal = (session: any) => {
@@ -152,28 +142,34 @@ export function SessionManagement({
   }
 
   // Add back handleEndSessionWithExtras for LS-only mode
-  const handleEndSessionWithExtras = () => {
+  const handleEndSessionWithExtras = async () => {
     if (!extrasModalSession) return
-    // Map extras to include name and price for each extra
-    const selectedExtras = extras.map(e => {
-      const product = products.find((p: any) => p.id === e.productId)
-      return {
-        productId: e.productId,
-        name: product ? product.name : e.name,
-        price: product ? product.price : e.price,
-        quantity: e.quantity
-      }
-    })
-    const newSessions = localSessions.map(s => s.id === extrasModalSession.id ? { 
-      ...s, 
-      is_active: false, 
-      end_time: new Date().toISOString(), 
-      extras: selectedExtras 
-    } : s)
-    saveSessionsLS(newSessions)
-    setExtrasLoading(false)
-    closeExtrasModal()
-    toast.success('Session ended successfully!')
+    setExtrasLoading(true)
+    try {
+      // Map extras to include name and price for each extra
+      const selectedExtras = extras.map(e => {
+        const product = products.find((p: any) => p.id === e.productId)
+        return {
+          productId: e.productId,
+          name: product ? product.name : e.name,
+          price: product ? product.price : e.price,
+          quantity: e.quantity
+        }
+      })
+      await fetch(`/api/session/${extrasModalSession.id}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extras: selectedExtras })
+      })
+      onDataChange()
+      closeExtrasModal()
+      toast.success('Session ended successfully!')
+    } catch (error) {
+      toast.error('Error ending session')
+      console.error('Error ending session:', error)
+    } finally {
+      setExtrasLoading(false)
+    }
   }
 
   // Commented out DB/API code for LS-only mode

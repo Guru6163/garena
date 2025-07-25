@@ -3,16 +3,15 @@ import { Button } from './ui/button'
 import { Input } from './ui/input'
 
 interface ProductManagementProps {
-  storageMode: string
+  onDataChange?: () => void
 }
 
-export function ProductManagement({ storageMode }: ProductManagementProps) {
+export function ProductManagement({ onDataChange }: ProductManagementProps) {
   const [products, setProducts] = useState<any[]>([])
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [editing, setEditing] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [localProducts, setLocalProducts] = useState<any[]>([])
 
   // Commented out DB/API code for LS-only mode
   // const loadProducts = async () => {
@@ -24,54 +23,43 @@ export function ProductManagement({ storageMode }: ProductManagementProps) {
   // }
 
   useEffect(() => {
-    if (storageMode === "ls") {
-      const stored = localStorage.getItem("products")
-      if (stored) {
-        setLocalProducts(JSON.parse(stored))
-      } else {
-        setLocalProducts([])
-      }
+    const loadProducts = async () => {
+      setLoading(true)
+      const res = await fetch('/api/product')
+      const data = await res.json()
+      setProducts(data)
+      setLoading(false)
     }
-  }, [storageMode])
+    loadProducts()
+  }, [])
 
   useEffect(() => {
-    if (storageMode === "ls") {
-      const handler = (e: StorageEvent) => {
-        if (e.key === "products") {
-          setLocalProducts(e.newValue ? JSON.parse(e.newValue) : [])
-        }
+    const handler = (e: StorageEvent) => {
+      if (e.key === "products") {
+        // This part is no longer relevant as we are using API
       }
-      window.addEventListener("storage", handler)
-      return () => window.removeEventListener("storage", handler)
     }
-  }, [storageMode])
+    window.addEventListener("storage", handler)
+    return () => window.removeEventListener("storage", handler)
+  }, [])
 
   const saveProductsLS = (newProducts: any[]) => {
-    localStorage.setItem("products", JSON.stringify(newProducts))
-    setLocalProducts(newProducts)
+    // This function is no longer relevant as we are using API
   }
 
-  const displayProducts = storageMode === "ls" ? localProducts : products
+  const displayProducts = products
 
   const handleAdd = async () => {
     if (!name || !price) return
-    if (storageMode === "ls") {
-      const newProduct = { id: Date.now(), name, price: Number(price) }
-      const newProducts = [...(localProducts || []), newProduct]
-      saveProductsLS(newProducts)
-      setName('')
-      setPrice('')
-      return
-    }
     setLoading(true)
-    // await fetch('/api/product', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ name, price: Number(price) })
-    // })
+    await fetch('/api/product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, price: Number(price) })
+    })
     setName('')
     setPrice('')
-    // loadProducts()
+    onDataChange?.()
   }
 
   const handleEdit = (product: any) => {
@@ -82,39 +70,26 @@ export function ProductManagement({ storageMode }: ProductManagementProps) {
 
   const handleUpdate = async () => {
     if (!editing) return
-    if (storageMode === "ls") {
-      const newProducts = localProducts.map(p => p.id === editing.id ? { ...p, name, price: Number(price) } : p)
-      saveProductsLS(newProducts)
-      setEditing(null)
-      setName('')
-      setPrice('')
-      return
-    }
     setLoading(true)
-    // await fetch('/api/product', {
-    //   method: 'PUT',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ id: editing.id, name, price: Number(price) })
-    // })
+    await fetch('/api/product', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: editing.id, name, price: Number(price) })
+    })
     setEditing(null)
     setName('')
     setPrice('')
-    // loadProducts()
+    onDataChange?.()
   }
 
   const handleDelete = async (id: number) => {
-    if (storageMode === "ls") {
-      const newProducts = localProducts.filter(p => p.id !== id)
-      saveProductsLS(newProducts)
-      return
-    }
     setLoading(true)
-    // await fetch('/api/product', {
-    //   method: 'DELETE',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ id })
-    // })
-    // loadProducts()
+    await fetch('/api/product', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+    onDataChange?.()
   }
 
   return (

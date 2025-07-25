@@ -23,73 +23,69 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 interface UserManagementProps {
   users: any[] // Changed from User[] to any[] as supabase is removed
   onDataChange: () => void
-  storageMode: string
 }
 
-export function UserManagement({ users, onDataChange, storageMode }: UserManagementProps) {
+export function UserManagement({ users, onDataChange }: UserManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<any | null>(null) // Changed from User to any
   const [formData, setFormData] = useState({ name: "", phone: "" })
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const stored = localStorage.getItem("users")
-      if (stored) {
-        setLocalUsers(JSON.parse(stored))
-      } else {
-        setLocalUsers([])
-      }
-    }
-  }, [storageMode])
+  // Remove localUsers state and use users prop directly
+  // const [localUsers, setLocalUsers] = useState<any[]>([])
+  const displayUsers = users
 
-  useEffect(() => {
-    if (storageMode === "ls") {
-      const handler = (e: StorageEvent) => {
-        if (e.key === "users") {
-          setLocalUsers(e.newValue ? JSON.parse(e.newValue) : [])
-        }
-      }
-      window.addEventListener("storage", handler)
-      return () => window.removeEventListener("storage", handler)
-    }
-  }, [storageMode])
+  // Remove saveUsersLS and any localStorage logic
 
-  const [localUsers, setLocalUsers] = useState<any[]>([])
-  const displayUsers = storageMode === "ls" ? localUsers : users
-
-  const saveUsersLS = (newUsers: any[]) => {
-    localStorage.setItem("users", JSON.stringify(newUsers))
-    setLocalUsers(newUsers)
-    onDataChange()
-  }
-
-  // Add back handleAddUser for LS-only mode
-  const handleAddUser = () => {
+  // Add user via API
+  const handleAddUser = async () => {
     if (!formData.name) return
-    const newUser = { id: Date.now(), name: formData.name, phone: formData.phone, is_active: true }
-    const newUsers = [...(localUsers || []), newUser]
-    saveUsersLS(newUsers)
-    setFormData({ name: '', phone: '' })
-    setIsAddDialogOpen(false)
-    toast.success('User added successfully!')
+    setLoading(true)
+    try {
+      await fetch('/api/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: formData.name, phone: formData.phone })
+      })
+      setFormData({ name: '', phone: '' })
+      setIsAddDialogOpen(false)
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Add back handleEditUser for LS-only mode
-  const handleEditUser = () => {
+  // Edit user via API
+  const handleEditUser = async () => {
     if (!editingUser || !formData.name) return
-    const newUsers = localUsers.map(u => u.id === editingUser.id ? { ...u, name: formData.name, phone: formData.phone } : u)
-    saveUsersLS(newUsers)
-    setEditingUser(null)
-    setFormData({ name: '', phone: '' })
-    toast.success('User updated successfully!')
+    setLoading(true)
+    try {
+      await fetch(`/api/user`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingUser.id, name: formData.name, phone: formData.phone })
+      })
+      setEditingUser(null)
+      setFormData({ name: '', phone: '' })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Add back handleDeleteUser for LS-only mode
-  const handleDeleteUser = (userId: number) => {
-    const newUsers = localUsers.filter(u => u.id !== userId)
-    saveUsersLS(newUsers)
-    toast.success('User deleted successfully!')
+  // Delete user via API
+  const handleDeleteUser = async (userId: number) => {
+    setLoading(true)
+    try {
+      await fetch(`/api/user`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId })
+      })
+      onDataChange()
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Commented out DB/API code for LS-only mode
