@@ -456,9 +456,8 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="text-base font-semibold text-gray-700 mb-1">{session.game_name || session.games?.title || 'Unknown Game'}</div>
-                  <CardTitle className="text-lg">{session.users?.name}</CardTitle>
-                  <CardDescription>{session.games?.name}</CardDescription>
+                  <CardTitle className="text-lg">{session.user?.name || 'Unknown User'}</CardTitle>
+                  <CardDescription>{session.game?.title || 'Unknown Game'}</CardDescription>
                 </div>
                 <Badge variant={session.is_active ? "default" : "secondary"}>
                   {session.is_active ? "Playing" : "Completed"}

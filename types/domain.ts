@@ -29,8 +29,8 @@ export type Session = {
   end_time?: string;
   is_active: boolean;
   created_at: string;
-  users?: User;
-  games?: Game;
+  user?: User;
+  game?: Game;
   // Add any additional fields used in the frontend (e.g., durationSec, price)
   durationSec?: number;
   price?: number;
