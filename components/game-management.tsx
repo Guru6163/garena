@@ -29,23 +29,22 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [editingGame, setEditingGame] = useState<any | null>(null) // Changed from Game to any
   const [formData, setFormData] = useState({
-    name: "",
-    rate: "",
-    rateType: "hour" as "30min" | "hour",
+    title: "",
+    prices: [{ name: "", price: "" }],
   })
   const [loading, setLoading] = useState(false)
 
   // Add game via API
   const handleAddGame = async () => {
-    if (!formData.name || !formData.rate) return
+    if (!formData.title || formData.prices.length === 0) return
     setLoading(true)
     try {
       await fetch('/api/game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formData.name.trim(), rate: Number(formData.rate), rate_type: formData.rateType })
+        body: JSON.stringify({ title: formData.title.trim(), prices: formData.prices.map(p => ({ name: p.name.trim(), price: Number(p.price) })) })
       })
-      setFormData({ name: '', rate: '', rateType: 'hour' })
+      setFormData({ title: '', prices: [{ name: '', price: '' }] })
       setIsAddDialogOpen(false)
       onDataChange()
     } finally {
@@ -55,16 +54,16 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
 
   // Edit game via API
   const handleEditGame = async () => {
-    if (!editingGame || !formData.name || !formData.rate) return
+    if (!editingGame || !formData.title || formData.prices.length === 0) return
     setLoading(true)
     try {
       await fetch('/api/game', {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editingGame.id, name: formData.name, rate: Number(formData.rate), rate_type: formData.rateType })
+        body: JSON.stringify({ id: editingGame.id, title: formData.title, prices: formData.prices.map(p => ({ name: p.name.trim(), price: Number(p.price) })) })
       })
       setEditingGame(null)
-      setFormData({ name: '', rate: '', rateType: 'hour' })
+      setFormData({ title: '', prices: [{ name: '', price: '' }] })
       onDataChange()
     } finally {
       setLoading(false)
@@ -144,9 +143,8 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
   const startEdit = (game: any) => { // Changed from Game to any
     setEditingGame(game)
     setFormData({
-      name: game.name,
-      rate: game.rate.toString(),
-      rateType: game.rate_type,
+      title: game.title,
+      prices: game.prices.map((p: any) => ({ name: p.name, price: p.price })),
     })
   }
 
@@ -168,24 +166,64 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Game Name</Label>
-                <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Enter game name" className="w-full" />
+                <Label htmlFor="title">Game Title</Label>
+                <Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Enter game title" className="w-full" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="rate">Rate (₹)</Label>
-                <Input id="rate" type="number" value={formData.rate} onChange={(e) => setFormData({ ...formData, rate: e.target.value })} placeholder="Enter rate" className="w-full" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="rateType">Rate Type</Label>
-                <Select value={formData.rateType} onValueChange={(value: "30min" | "hour") => setFormData({ ...formData, rateType: value })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30min">Per 30 Minutes</SelectItem>
-                    <SelectItem value="hour">Per Hour</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="prices">Pricing Models</Label>
+                <div className="grid gap-2">
+                  {formData.prices.map((price, index) => (
+                    <div key={index} className="grid grid-cols-2 gap-2 items-center">
+                      <Input
+                        id={`price-name-${index}`}
+                        value={price.name}
+                        onChange={(e) => {
+                          const newPrices = [...formData.prices];
+                          newPrices[index] = { ...newPrices[index], name: e.target.value };
+                          setFormData({ ...formData, prices: newPrices });
+                        }}
+                        placeholder="Model Name"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          id={`price-price-${index}`}
+                          type="number"
+                          value={price.price}
+                          onChange={(e) => {
+                            const newPrices = [...formData.prices];
+                            newPrices[index] = { ...newPrices[index], price: e.target.value };
+                            setFormData({ ...formData, prices: newPrices });
+                          }}
+                          placeholder="Price (₹)"
+                        />
+                        {formData.prices.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-600 hover:bg-red-100 p-0 ml-2"
+                            aria-label="Remove pricing model"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                prices: formData.prices.filter((_, i) => i !== index),
+                              });
+                            }}
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setFormData({ ...formData, prices: [...formData.prices, { name: "", price: "" }] })}
+                  className="mt-2"
+                >
+                  Add Pricing Model
+                </Button>
               </div>
             </div>
             <DialogFooter>
@@ -203,9 +241,24 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
-                  <CardTitle className="text-lg">{game.name}</CardTitle>
+                  <CardTitle className="text-lg">{game.title}</CardTitle>
                   <CardDescription>
-                    ₹{game.rate} per {game.rate_type === "30min" ? "30 minutes" : "hour"}
+                    <table className="w-full text-sm text-left text-gray-600 mt-2">
+                      <thead>
+                        <tr>
+                          <th className="pr-4 pb-1 font-semibold">Model Name</th>
+                          <th className="pb-1 font-semibold">Price (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {game.prices.map((p: any, i: number) => (
+                          <tr key={i}>
+                            <td className="pr-4 py-1">{p.name}</td>
+                            <td className="py-1 font-medium">₹{p.price}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </CardDescription>
                 </div>
                 <Badge variant={game.is_active ? "default" : "secondary"}>
@@ -232,36 +285,66 @@ export function GameManagement({ games, onDataChange }: GameManagementProps) {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="edit-name">Game Name</Label>
+              <Label htmlFor="edit-title">Game Title</Label>
               <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="edit-title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-rate">Rate (₹)</Label>
-              <Input
-                id="edit-rate"
-                type="number"
-                value={formData.rate}
-                onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-rateType">Rate Type</Label>
-              <Select
-                value={formData.rateType}
-                onValueChange={(value: "30min" | "hour") => setFormData({ ...formData, rateType: value })}
+              <Label htmlFor="edit-prices">Pricing Models</Label>
+              <div className="grid gap-2">
+                {formData.prices.map((price, index) => (
+                  <div key={index} className="grid grid-cols-2 gap-2 items-center">
+                    <Input
+                      id={`edit-price-name-${index}`}
+                      value={price.name}
+                      onChange={(e) => {
+                        const newPrices = [...formData.prices];
+                        newPrices[index] = { ...newPrices[index], name: e.target.value };
+                        setFormData({ ...formData, prices: newPrices });
+                      }}
+                      placeholder="Model Name"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        id={`edit-price-price-${index}`}
+                        type="number"
+                        value={price.price}
+                        onChange={(e) => {
+                          const newPrices = [...formData.prices];
+                          newPrices[index] = { ...newPrices[index], price: e.target.value };
+                          setFormData({ ...formData, prices: newPrices });
+                        }}
+                        placeholder="Price (₹)"
+                      />
+                      {formData.prices.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              prices: formData.prices.filter((_, i) => i !== index),
+                            });
+                          }}
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setFormData({ ...formData, prices: [...formData.prices, { name: "", price: "" }] })}
+                className="mt-2"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30min">Per 30 Minutes</SelectItem>
-                  <SelectItem value="hour">Per Hour</SelectItem>
-                </SelectContent>
-              </Select>
+                Add Pricing Model
+              </Button>
             </div>
           </div>
           <DialogFooter>

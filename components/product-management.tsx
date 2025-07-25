@@ -72,7 +72,7 @@ export function ProductManagement({ onDataChange }: ProductManagementProps) {
     if (!editing) return
     setLoading(true)
     await fetch('/api/product', {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: editing.id, name, price: Number(price) })
     })

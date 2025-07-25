@@ -69,28 +69,21 @@ export default function HomePage() {
   }, 0)
 
   function calculateAmount(session: any) {
-    if (!session.end_time || !session.game) return 0
-
+    if (!session.end_time) return 0
     const startTime = new Date(session.start_time)
     const endTime = new Date(session.end_time)
     const durationMs = endTime.getTime() - startTime.getTime()
     const durationMinutes = durationMs / (1000 * 60)
-
-    const ratePerMinute = session.game.rate_type === "hour" ? session.game.rate / 60 : session.game.rate / 30
-
+    const ratePerMinute = session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30
     return Math.round(durationMinutes * ratePerMinute)
   }
 
   function getCurrentAmount(session: any) {
-    if (!session.game) return 0
-
     const startTime = new Date(session.start_time)
     const currentTime = new Date()
     const durationMs = currentTime.getTime() - startTime.getTime()
     const durationMinutes = durationMs / (1000 * 60)
-
-    const ratePerMinute = session.game.rate_type === "hour" ? session.game.rate / 60 : session.game.rate / 30
-
+    const ratePerMinute = session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30
     return Math.round(durationMinutes * ratePerMinute)
   }
 

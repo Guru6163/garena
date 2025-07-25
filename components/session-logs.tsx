@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Printer, Filter, Download, Calendar } from "lucide-react"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import type { Game, User, Session } from "@/types/domain";
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface SessionLogsProps {
   games: Game[]
@@ -31,9 +32,11 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     dateTo: "",
     status: "all", // all, active, completed
   })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchLogs = async () => {
+      setLoading(true)
       const params = new URLSearchParams()
       if (filters.gameId !== "all") params.append("gameId", filters.gameId)
       if (filters.userId !== "all") params.append("userId", filters.userId)
@@ -43,8 +46,10 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       const res = await fetch(`/api/logs?${params.toString()}`)
       if (res.ok) {
         const data = await res.json()
+        console.log('Fetched sessions from API:', data)
         setSessions(data)
       }
+      setLoading(false)
     }
     fetchLogs()
   }, [filters])
@@ -53,7 +58,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
   const filteredSessions = useMemo(() => {
     // Only show completed (not active) sessions, regardless of filters
-    return displaySessions
+    const completed = displaySessions
       .filter((session) => !session.is_active)
       .filter((session) => {
         // Game filter
@@ -85,6 +90,10 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
         return true
       })
+    // Sort by start_time descending (newest first)
+    completed.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    console.log('Filtered completed sessions for logs:', completed)
+    return completed
   }, [displaySessions, filters])
 
   const formatDuration = (startTime: string, endTime?: string) => {
@@ -107,7 +116,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const durationMs = currentTime.getTime() - startTime.getTime()
     const durationMinutes = durationMs / (1000 * 60)
 
-    const ratePerMinute = session.games.rate_type === "hour" ? session.games.rate / 60 : session.games.rate / 30
+    const ratePerMinute = session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30
 
     return Math.round(durationMinutes * ratePerMinute)
   }
@@ -127,6 +136,12 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       } catch {}
     }
     return calculateAmount(session)
+  }
+
+  // In the logs table, use bill_details.total for the Amount display
+  const getDisplayAmount = (session: any) => {
+    const total = session.bill_details?.total;
+    return typeof total === 'number' && !isNaN(total) ? total : 0;
   }
 
   const clearFilters = () => {
@@ -201,38 +216,57 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
   // Print Bill function (copied and adapted from session-management.tsx)
   const printBill = (session: Session) => {
-    const amount = calculateAmount(session)
-    const duration = formatDuration(session.start_time, session.end_time)
-    const userName = session.users?.name || 'Unknown'
-    const gameName = session.games?.name || 'Unknown'
-    const startTime = new Date(session.start_time).toLocaleString()
-    const endTime = session.end_time ? new Date(session.end_time).toLocaleString() : 'Ongoing'
-    const rate = session.games?.rate
-    const rateType = session.games?.rate_type === '30min' ? '30 minutes' : 'hour'
+    // Use robust field selection and fallbacks
+    const userName = session.users?.name || 'Unknown';
+    const gameName = session.game_name || session.games?.title || 'Unknown';
+    const startTime = session.start_time ? new Date(session.start_time).toLocaleString() : 'Unknown';
+    const endTime = session.end_time ? new Date(session.end_time).toLocaleString() : 'Ongoing';
+    const duration = formatDuration(session.start_time, session.end_time);
+    const breakdown = session.bill_details?.breakdown || [];
+    const rateBefore6 = breakdown[0]?.rate ?? session.bill_details?.rate ?? 0;
+    const rateAfter6 = breakdown[1]?.rate ?? 0;
+    const rateTypeBefore6 = breakdown[0]?.rateType || session.bill_details?.rate_type || 'hour';
+    const rateTypeAfter6 = breakdown[1]?.rateType || (breakdown[1] ? 'hour' : '');
+    const amount = typeof session.bill_details?.total === 'number' ? session.bill_details.total : 0;
 
-    // Parse bill details for extras (support LS sessions)
-    let extrasRows = ''
-    let extrasTotal = 0
-    let grandTotal = amount
-    if (session.extras && Array.isArray(session.extras) && session.extras.length > 0) {
-      extrasRows = session.extras.map((extra: any) =>
-        `<tr><td style="padding: 6px 0; color: #555;">${extra.name || ''} x${extra.quantity}</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${extra.price || 0} x ${extra.quantity} = ₹${(extra.price || 0) * extra.quantity}</td></tr>`
-      ).join('')
-      extrasTotal = session.extras.reduce((sum: number, e: any) => sum + (e.quantity * (e.price || 0)), 0)
-      grandTotal = amount + extrasTotal
-    } else if (session.bill_details) {
-      try {
-        const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
-        if (details.extras && Array.isArray(details.extras) && details.extras.length > 0) {
-          extrasRows = details.extras.map((extra: any) =>
-            `<tr><td style="padding: 6px 0; color: #555;">${extra.name} x${extra.quantity}</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${extra.price} x ${extra.quantity} = ₹${extra.total}</td></tr>`
-          ).join('')
-          extrasTotal = details.extrasTotal || details.extras.reduce((sum: number, e: any) => sum + (e.total || 0), 0)
-          grandTotal = (details.total || (amount + extrasTotal))
-        }
-      } catch {}
+    // Calculate breakdown for before/after 6PM
+    let beforeAmount = 0, beforeSec = 0, beforeRate = 0, beforeRateType = '', afterAmount = 0, afterSec = 0, afterRate = 0, afterRateType = '';
+    if (breakdown.length > 0) {
+      beforeAmount = breakdown[0]?.amount ?? 0;
+      beforeSec = breakdown[0]?.durationSec ?? 0;
+      beforeRate = breakdown[0]?.rate ?? 0;
+      beforeRateType = breakdown[0]?.rateType || 'hour';
+      if (breakdown[1]) {
+        afterAmount = breakdown[1]?.amount ?? 0;
+        afterSec = breakdown[1]?.durationSec ?? 0;
+        afterRate = breakdown[1]?.rate ?? 0;
+        afterRateType = breakdown[1]?.rateType || 'hour';
+      }
+    } else {
+      // If no breakdown, use main rate for the whole session
+      beforeAmount = amount;
+      beforeSec = (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000;
+      beforeRate = rateBefore6;
+      beforeRateType = rateTypeBefore6;
+    }
+    const beforeMins = Math.round(beforeSec / 60);
+    const afterMins = Math.round(afterSec / 60);
+
+    // Extras
+    const extras = session.bill_details?.extras || [];
+    let extrasRows = '';
+    if (extras.length > 0) {
+      extrasRows = extras.map((extra: any) =>
+        `<tr><td style="padding: 6px 0; color: #475569;">Extras - ${extra.name}</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${extra.total}</td></tr>`
+      ).join('');
+    } else {
+      extrasRows = `<tr><td style="padding: 6px 0; color: #475569;">Extras</td><td style="padding: 6px 0; text-align: right; color: #222;">₹0</td></tr>`;
     }
 
+    // For Rate after 6PM, always show the per hour rate from session.game_rate_after_6pm if present
+    const afterPerHourRate = session.game_rate_after_6pm || afterRate || 0;
+
+    // Bill content with beautiful border layout and handwritten breakdown
     const billContent = `
       <html><head>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -248,25 +282,25 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;">₹${rate} per ${rateType}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate before 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${beforeAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate after 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${afterAmount} for ${afterMins}mins - (${afterPerHourRate}Rs/H)</span></td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
         <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
         <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
           <tbody>
-            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${formatINR(amount)}</td></tr>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
             ${extrasRows}
-            ${extrasRows ? `<tr><td style="padding: 6px 0; color: #475569; font-weight: bold;">Extras Total</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: bold;">₹${formatINR(extrasTotal)}</td></tr>` : ''}
-            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 12px 0; font-size: 1.13rem; font-weight: bold; color: #1e293b;">Grand Total</td><td style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${formatINR(grandTotal)}</td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
+        <div style="font-size: 1.13rem; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Grand Total</div>
+        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${amount}</div>
         <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
       </div>
       </body></html>
-    `
+    `;
 
     const printWindow = window.open("", "_blank")
     if (printWindow) {
@@ -274,6 +308,17 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       printWindow.document.close()
       printWindow.print()
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px] w-full">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <span className="text-gray-500">Loading session logs...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -385,6 +430,8 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         <Table className="border border-gray-300">
           <TableHeader>
             <TableRow>
+              <TableHead className="border border-gray-300">ID</TableHead>
+              <TableHead className="border border-gray-300">Date</TableHead>
               <TableHead className="border border-gray-300">User</TableHead>
               <TableHead className="border border-gray-300">Game</TableHead>
               <TableHead className="border border-gray-300">Start Time</TableHead>
@@ -398,12 +445,14 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
           <TableBody>
             {filteredSessions.map((session) => (
               <TableRow key={session.id}>
+                <TableCell className="border border-gray-200">{session.id}</TableCell>
+                <TableCell className="border border-gray-200">{new Date(session.start_time).toISOString().split('T')[0]}</TableCell>
                 <TableCell className="border border-gray-200">{session.users?.name || 'Unknown'}</TableCell>
-                <TableCell className="border border-gray-200">{session.games?.name || 'Unknown'}</TableCell>
-                <TableCell className="border border-gray-200">{new Date(session.start_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</TableCell>
-                <TableCell className="border border-gray-200">{session.end_time ? new Date(session.end_time).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : 'Ongoing'}</TableCell>
+                <TableCell className="border border-gray-200">{session.game_name || session.games?.title || 'Unknown'}</TableCell>
+                <TableCell className="border border-gray-200">{new Date(session.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</TableCell>
+                <TableCell className="border border-gray-200">{session.end_time ? new Date(session.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : 'Ongoing'}</TableCell>
                 <TableCell className="border border-gray-200">{formatDuration(session.start_time, session.end_time)}</TableCell>
-                <TableCell className="border border-gray-200">₹{formatINR(getTotalAmount(session))}</TableCell>
+                <TableCell className="border border-gray-200">₹{formatINR(getDisplayAmount(session))}</TableCell>
                 <TableCell className="border border-gray-200">{session.is_active ? 'Active' : 'Completed'}</TableCell>
                 <TableCell className="border border-gray-200">
                   <Button variant="outline" size="sm" onClick={() => printBill(session)}>

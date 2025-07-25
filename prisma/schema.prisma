@@ -25,13 +25,20 @@ model User {
 }
 
 model Game {
-  id         Int      @id @default(autoincrement())
-  name       String   @unique
-  rate       Int
-  rate_type  String   // '30min' or 'hour'
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
+  id         Int         @id @default(autoincrement())
+  title      String      // changed from name
+  is_active  Boolean     @default(true)
+  created_at DateTime    @default(now())
   sessions   Session[]
+  prices     GamePrice[] // new relation for pricing models
+}
+
+model GamePrice {
+  id      Int    @id @default(autoincrement())
+  name    String // e.g. "Per Hour", "Per 30 Min", "VIP"
+  price   Int    // price in rupees
+  game    Game   @relation(fields: [gameId], references: [id])
+  gameId  Int
 }
 
 model Session {
@@ -48,10 +55,13 @@ model Session {
   game_name  String?
   game_rate  Int?
   game_rate_type String?
+  game_rate_after_6pm Int?
+  game_rate_type_after_6pm String?
   bill_amount Int?
   bill_details String?
   // New: relation to session extras
   extras     SessionProduct[]
+  switch_pricing_at_6pm Boolean @default(false) // Whether to switch pricing at 6PM
 }
 
 model Product {

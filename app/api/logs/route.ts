@@ -24,14 +24,41 @@ export async function GET(req: NextRequest) {
     const end = s.end_time ? new Date(s.end_time) : new Date();
     const start = new Date(s.start_time);
     const durationSec = Math.floor((end.getTime() - start.getTime()) / 1000);
+    // Use bill_details.total if available
     let price = 0;
-    if (s.game.rate_type === 'hour') {
-      price = Math.round((durationSec / 3600) * s.game.rate);
-    } else {
-      price = Math.round((durationSec / 1800) * s.game.rate);
+    let billDetails = {};
+    if (s.bill_details) {
+      try {
+        billDetails = typeof s.bill_details === 'string' ? JSON.parse(s.bill_details) : s.bill_details;
+        if (typeof billDetails.total === 'number') {
+          price = billDetails.total;
+        }
+      } catch {}
     }
-    // Rename fields to match frontend expectations
-    return { ...s, games: s.game, users: s.user, durationSec, price };
+    // Fallback to old logic if no bill_details
+    if (!price) {
+      if (s.game_rate_type === 'hour') {
+        price = Math.round((durationSec / 3600) * (s.game_rate || 0));
+      } else {
+        price = Math.round((durationSec / 1800) * (s.game_rate || 0));
+      }
+    }
+    // Only return clean fields
+    return {
+      id: s.id,
+      user_id: s.user_id,
+      game_id: s.game_id,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      is_active: s.is_active,
+      game_name: s.game_name,
+      bill_amount: s.bill_amount,
+      bill_details: billDetails,
+      users: s.user,
+      games: s.game,
+      durationSec,
+      price,
+    };
   });
 
   return NextResponse.json(logs);

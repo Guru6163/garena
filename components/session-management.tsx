@@ -41,13 +41,21 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
   const [selectedProductId, setSelectedProductId] = useState<string>("")
   const [extras, setExtras] = useState<{ productId: number, name: string, price: number, quantity: number }[]>([])
   const [extrasLoading, setExtrasLoading] = useState(false)
+  // Add state for selected pricing model
+  const [selectedPriceIndex, setSelectedPriceIndex] = useState<number | null>(null)
+  // Add state for selected pricing model after 6PM
+  const [selectedPriceIndexAfter6pm, setSelectedPriceIndexAfter6pm] = useState<number | null>(null)
+
+  // Remove hardcoded simulated time logic
+  // Use real current time for all calculations
+  const [simulatedCurrentTime, setSimulatedCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
+      setSimulatedCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Load products from localStorage for Extras modal
   useEffect(() => {
@@ -73,13 +81,32 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
   const displaySessions = sessions
 
   // Start session via API
-  const handleStartSession = async (sessionData: any) => {
+  const handleStartSession = async () => {
+    if (!selectedGameId || !selectedUserId || selectedPriceIndex === null) return
+    // If after 6PM pricing is required, ensure it's selected and different from before 6PM
+    const game = games.find(g => g.id.toString() === selectedGameId)
+    const price = game?.prices[selectedPriceIndex]
+    let priceAfter6pm = null
+    if ((game?.prices.length ?? 0) > 1 && selectedPriceIndexAfter6pm !== null) {
+      priceAfter6pm = game.prices[selectedPriceIndexAfter6pm]
+    }
     setLoading(true)
     try {
+      // Use real current time for session start
+      const now = new Date();
       await fetch('/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sessionData)
+        body: JSON.stringify({
+          user_id: Number(selectedUserId),
+          game_id: Number(selectedGameId),
+          price_name: price.name,
+          price_value: price.price,
+          start_time: now.toISOString(),
+          switch_pricing_at_6pm: !!priceAfter6pm,
+          price_name_after_6pm: priceAfter6pm?.name,
+          price_value_after_6pm: priceAfter6pm?.price,
+        })
       })
       setIsStartDialogOpen(false)
       onDataChange()
@@ -89,13 +116,19 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
   }
 
   // End session via API
-  const handleEndSession = async (sessionId: number, endData: any) => {
+  const handleEndSession = async (sessionId: number, endData: any = {}) => {
+    // Block ending if simulatedCurrentTime is before session.start_time
+    const session = sessions.find(s => s.id === sessionId);
+    if (session && simulatedCurrentTime < new Date(session.start_time)) {
+      toast.error('Cannot end session before it has started!');
+      return;
+    }
     setLoading(true)
     try {
       await fetch(`/api/session/${sessionId}/end`, {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(endData)
+        body: JSON.stringify({ ...endData, end_time: simulatedCurrentTime.toISOString() })
       })
       onDataChange()
     } finally {
@@ -199,7 +232,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
   const formatDuration = (startTime: string, endTime?: string, isActive?: boolean) => {
     const start = new Date(startTime)
     // For active sessions, use currentTime for live duration
-    const end = isActive ? currentTime : (endTime ? new Date(endTime) : new Date())
+    const end = isActive ? simulatedCurrentTime : (endTime ? new Date(endTime) : new Date())
     const durationMs = end.getTime() - start.getTime()
 
     const hours = Math.floor(durationMs / (1000 * 60 * 60))
@@ -219,6 +252,39 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
       : (session.games?.rate ?? 0) / 30
 
     return Math.round(duration * ratePerMinute)
+  }
+
+  // Correct live amount calculation for active sessions, matching backend logic
+  const getLiveSessionAmount = (session: any) => {
+    const start = new Date(session.start_time);
+    const now = simulatedCurrentTime;
+    const switchTime = new Date(start);
+    switchTime.setHours(18, 0, 0, 0); // 6:00 PM
+    let beforeSec = 0, afterSec = 0;
+    if (session.switch_pricing_at_6pm && (session.game_rate_after_6pm || session.game_rate_type_after_6pm)) {
+      if (now <= switchTime) {
+        beforeSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
+      } else if (start >= switchTime) {
+        afterSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
+      } else {
+        beforeSec = Math.max(0, (switchTime.getTime() - start.getTime()) / 1000);
+        afterSec = Math.max(0, (now.getTime() - switchTime.getTime()) / 1000);
+      }
+      const beforeRate = session.game_rate || 0;
+      const afterRate = session.game_rate_after_6pm || 0;
+      const beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
+      const afterAmount = Math.round((afterSec / 3600) * afterRate);
+      return Math.max(0, beforeAmount + afterAmount);
+    } else {
+      const durationSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
+      let amount = 0;
+      if (session.game_rate_type === 'hour') {
+        amount = Math.round((durationSec / 3600) * (session.game_rate || 0));
+      } else if (session.game_rate_type === '30min') {
+        amount = Math.round((durationSec / 1800) * (session.game_rate || 0));
+      }
+      return Math.max(0, amount);
+    }
   }
 
   const printBill = (session: Session) => {
@@ -308,21 +374,55 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
             <div className="grid gap-4 py-4">
               <div className="grid gap-2 w-full">
                 <Label htmlFor="game">Select Game</Label>
-                <Select value={selectedGameId} onValueChange={setSelectedGameId}>
+                <Select value={selectedGameId} onValueChange={value => {
+                  setSelectedGameId(value)
+                  setSelectedPriceIndex(null)
+                  setSelectedPriceIndexAfter6pm(null) // Reset after game change
+                }}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose a game" />
                   </SelectTrigger>
                   <SelectContent>
                     {games
-                      .filter((game) => game.is_active)
                       .map((game) => (
                         <SelectItem key={game.id} value={game.id.toString()}>
-                          {game.name} - ₹{game.rate}/{game.rate_type === "30min" ? "30min" : "hr"}
+                          {game.title}
                         </SelectItem>
                       ))}
                   </SelectContent>
                 </Select>
               </div>
+              {selectedGameId && (
+                <div className="grid gap-2 w-full">
+                  <Label htmlFor="pricing">Select Pricing Model</Label>
+                  <Select value={selectedPriceIndex !== null ? selectedPriceIndex.toString() : ""} onValueChange={v => setSelectedPriceIndex(Number(v))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a pricing model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {games.find(g => g.id.toString() === selectedGameId)?.prices.map((p, idx) => (
+                        <SelectItem key={idx} value={idx.toString()}>{p.name} - ₹{p.price}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {/* Optional select for pricing after 6PM if multiple pricing models exist */}
+              {selectedGameId && (games.find(g => g.id.toString() === selectedGameId)?.prices.length ?? 0) > 1 && (
+                <div className="grid gap-2 w-full">
+                  <Label htmlFor="pricingAfter6pm">Pricing Model after 6PM</Label>
+                  <Select value={selectedPriceIndexAfter6pm !== null ? selectedPriceIndexAfter6pm.toString() : ""} onValueChange={v => setSelectedPriceIndexAfter6pm(Number(v))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose pricing model after 6PM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {games.find(g => g.id.toString() === selectedGameId)?.prices.map((p, idx) => (
+                        <SelectItem key={idx} value={idx.toString()}>{p.name} - ₹{p.price}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid gap-2 w-full">
                 <Label htmlFor="user">Select User</Label>
                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -356,6 +456,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
+                  <div className="text-base font-semibold text-gray-700 mb-1">{session.game_name || session.games?.title || 'Unknown Game'}</div>
                   <CardTitle className="text-lg">{session.users?.name}</CardTitle>
                   <CardDescription>{session.games?.name}</CardDescription>
                 </div>
@@ -385,7 +486,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
                 <div>
                   <p className="text-sm text-gray-600">Amount</p>
                   <p className="font-medium text-green-600">
-                    ₹{session.is_active ? getCurrentAmount(session) : calculateAmount(session)}
+                    ₹{session.is_active ? getLiveSessionAmount(session) : calculateAmount(session)}
                   </p>
                 </div>
               </div>

@@ -7,13 +7,18 @@ export type User = {
   is_active: boolean;
 };
 
-export type Game = {
+export type GamePrice = {
   id: number;
   name: string;
-  rate: number;
-  rate_type: "30min" | "hour";
+  price: number;
+};
+
+export type Game = {
+  id: number;
+  title: string;
   is_active: boolean;
   created_at: string;
+  prices: GamePrice[];
 };
 
 export type Session = {

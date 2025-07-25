@@ -35,7 +35,7 @@ function SessionCard({ session, currentTime, onEnd, onPrint, loading }: any) {
             <CardDescription>{session.games?.name}</CardDescription>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-green-600">₹{session.games?.rate}</p>
+            <p className="text-2xl font-bold text-green-600">₹{session.game_rate}</p>
             <p className="text-sm text-gray-600">Current Amount</p>
           </div>
         </div>
@@ -52,11 +52,11 @@ function SessionCard({ session, currentTime, onEnd, onPrint, loading }: any) {
           </div>
           <div>
             <p className="text-sm text-gray-600">Rate</p>
-            <p className="font-medium">₹{session.games?.rate}/{session.games?.rate_type === "30min" ? "30min" : "hr"}</p>
+            <p className="font-medium">₹{session.game_rate}/{session.game_rate_type === "30min" ? "30min" : "hr"}</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">Rate/Min</p>
-            <p className="font-medium">₹{(session.games?.rate_type === "hour" ? session.games?.rate / 60 : session.games?.rate / 30).toFixed(2)}</p>
+            <p className="font-medium">₹{(session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30).toFixed(2)}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -104,7 +104,7 @@ export function OngoingSessions({ getCurrentAmount }: OngoingSessionsProps) {
     try {
       setLoading(true)
       const res = await fetch(`/api/session/${sessionId}/end`, {
-        method: 'PUT',
+        method: 'PATCH',
       })
       if (!res.ok) throw new Error('Failed to end session')
       await fetchOngoing()
@@ -141,7 +141,7 @@ export function OngoingSessions({ getCurrentAmount }: OngoingSessionsProps) {
       Current Time: ${currentTime.toLocaleString()}
       Duration: ${duration}
       
-      Rate: ₹${session.rate} per ${session.rate_type === "30min" ? "30 minutes" : "hour"}
+      Rate: ₹${session.game_rate} per ${session.game_rate_type === "30min" ? "30 minutes" : "hour"}
       
       Current Amount: ₹${amount}
       

@@ -61,7 +61,7 @@ export function UserManagement({ users, onDataChange }: UserManagementProps) {
     setLoading(true)
     try {
       await fetch(`/api/user`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingUser.id, name: formData.name, phone: formData.phone })
       })
