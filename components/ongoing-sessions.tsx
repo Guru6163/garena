@@ -59,6 +59,23 @@ function SessionCard({ session, currentTime, onEnd, onPrint, loading }: any) {
             <p className="font-medium">₹{(session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30).toFixed(2)}</p>
           </div>
         </div>
+        {/* Pricing Model Switch Info */}
+        {session.switch_pricing_at_6pm && (
+          <div className="bg-yellow-50 border border-yellow-300 rounded p-3 mb-3">
+            <div className="font-semibold text-yellow-800 mb-1 flex items-center gap-2">
+              <span>Pricing Model Switched</span>
+              <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-700">After 6PM</Badge>
+            </div>
+            <div className="text-sm text-gray-700">
+              <div className="mb-1">
+                <span className="font-medium">Default:</span> ₹{session.game_rate} / {session.game_rate_type === "30min" ? "30min" : "hr"}
+              </div>
+              <div>
+                <span className="font-medium">After 6PM:</span> ₹{session.game_rate_after_6pm || "-"} / {session.game_rate_type_after_6pm === "30min" ? "30min" : session.game_rate_type_after_6pm === "hour" ? "hr" : "-"}
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={() => onEnd(session.id)} disabled={loading}>
             <Square className="h-4 w-4 mr-2" />

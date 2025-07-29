@@ -42,23 +42,29 @@ export async function PUT(req: NextRequest) {
       const switchTime = new Date(start);
       switchTime.setHours(18, 0, 0, 0); // 6:00 PM
       let beforeSec = 0, afterSec = 0;
-      if (end <= switchTime) {
-        beforeSec = durationSec;
-      } else if (start >= switchTime) {
-        afterSec = durationSec;
+      // Only split if start < 6PM and end > 6PM (not equal)
+      if (end <= switchTime || start >= switchTime) {
+        // No overlap, use single rate
+        if (end <= switchTime) {
+          beforeSec = durationSec;
+          // Use before 6PM rate
+          const beforeRate = session.game_rate || 0;
+          price = Math.round((beforeSec / 3600) * beforeRate);
+        } else {
+          afterSec = durationSec;
+          const afterRate = session.game_rate_after_6pm || 0;
+          price = Math.round((afterSec / 3600) * afterRate);
+        }
       } else {
+        // Overlaps 6PM: start < 6PM, end > 6PM
         beforeSec = Math.floor((switchTime.getTime() - start.getTime()) / 1000);
         afterSec = Math.floor((end.getTime() - switchTime.getTime()) / 1000);
-      }
-      // Use selected rates for before and after 6PM
-      const beforeRate = session.game_rate || 0;
-      const afterRate = session.game_rate_after_6pm || 0;
-      // Assume both rates are per hour for now (can be enhanced to support rate type)
-      const beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
-      const afterAmount = Math.round((afterSec / 3600) * afterRate);
-      price = beforeAmount + afterAmount;
-      // Add breakdown if session spans 6PM
-      if (beforeSec > 0 && afterSec > 0) {
+        const beforeRate = session.game_rate || 0;
+        const afterRate = session.game_rate_after_6pm || 0;
+        const beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
+        const afterAmount = Math.round((afterSec / 3600) * afterRate);
+        price = beforeAmount + afterAmount;
+        // Add breakdown if session spans 6PM
         breakdown = [
           {
             label: `Before 6PM`,

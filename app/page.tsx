@@ -13,13 +13,32 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ProductManagement } from "@/components/product-management"
 import { CostCalculator } from "@/components/cost-calculator"
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function HomePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("dashboard")
   const [games, setGames] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // On mount, read tab from URL
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab && typeof urlTab === 'string') {
+      setActiveTab(urlTab);
+    }
+  }, [searchParams]);
+
+  // On tab change, update URL
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    router.replace('?' + params.toString(), { scroll: false });
+  };
 
   useEffect(() => {
     loadData()
@@ -149,31 +168,31 @@ export default function HomePage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Garena Games</h1>
         {/* Navigation */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => setActiveTab("dashboard")}> 
+          <Button variant={activeTab === "dashboard" ? "default" : "outline"} onClick={() => handleTabChange("dashboard")}> 
             <LayoutDashboard className="h-4 w-4 mr-2" />
             Dashboard
           </Button>
-          <Button variant={activeTab === "sessions" ? "default" : "outline"} onClick={() => setActiveTab("sessions")}> 
+          <Button variant={activeTab === "sessions" ? "default" : "outline"} onClick={() => handleTabChange("sessions")}> 
             <Clock className="h-4 w-4 mr-2" />
             Sessions
           </Button>
-          <Button variant={activeTab === "games" ? "default" : "outline"} onClick={() => setActiveTab("games")}> 
+          <Button variant={activeTab === "games" ? "default" : "outline"} onClick={() => handleTabChange("games")}> 
             <GamepadIcon className="h-4 w-4 mr-2" />
             Manage Games
           </Button>
-          <Button variant={activeTab === "users" ? "default" : "outline"} onClick={() => setActiveTab("users")}> 
+          <Button variant={activeTab === "users" ? "default" : "outline"} onClick={() => handleTabChange("users")}> 
             <User className="h-4 w-4 mr-2" />
             Users
           </Button>
-          <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => setActiveTab("logs")}> 
+          <Button variant={activeTab === "logs" ? "default" : "outline"} onClick={() => handleTabChange("logs")}> 
             <ListOrdered className="h-4 w-4 mr-2" />
             Session Logs
           </Button>
-          <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => setActiveTab("extras")}> 
+          <Button variant={activeTab === "extras" ? "default" : "outline"} onClick={() => handleTabChange("extras")}> 
             <Package className="h-4 w-4 mr-2" />
             Extras
           </Button>
-          <Button variant={activeTab === "cost-calculator" ? "default" : "outline"} onClick={() => setActiveTab("cost-calculator")}> 
+          <Button variant={activeTab === "cost-calculator" ? "default" : "outline"} onClick={() => handleTabChange("cost-calculator")}> 
             <IndianRupee className="h-4 w-4 mr-2" />
             Cost Calculator
           </Button>

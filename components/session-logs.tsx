@@ -266,8 +266,11 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     // For Rate after 6PM, always show the per hour rate from session.game_rate_after_6pm if present
     const afterPerHourRate = session.game_rate_after_6pm || afterRate || 0;
 
-    // Bill content with beautiful border layout and handwritten breakdown
-    const billContent = `
+    // Bill content: use two templates based on breakdown
+    let billContent = '';
+    if (breakdown.length > 1) {
+      // Multiple prices: show before/after 6PM
+      billContent = `
       <html><head>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
       </head><body style="margin:0;padding:0;">
@@ -300,7 +303,43 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
       </div>
       </body></html>
-    `;
+      `;
+    } else {
+      // Single price: show only default rate
+      billContent = `
+      <html><head>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+      </head><body style="margin:0;padding:0;">
+      <div style="max-width: 440px; margin: 40px auto; border: 2px solid #222; border-radius: 18px; padding: 36px 28px; font-family: 'Inter', 'Roboto', 'Arial', 'Helvetica Neue', Arial, sans-serif; background: #f9fafb; box-shadow: 0 6px 32px rgba(0,0,0,0.10);">
+        <h2 style="text-align: center; font-size: 2.2rem; font-weight: bold; margin-bottom: 10px; letter-spacing: 2px; color: #1a202c; font-family: inherit;">GARENA GAMES</h2>
+        <div style="text-align: center; font-size: 1.15rem; color: #6366f1; margin-bottom: 22px; font-weight: 600;">Session Bill</div>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 18px;"></div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 1.04rem;">
+          <tbody>
+            <tr><td style="padding: 7px 0; color: #64748b;">Player</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${userName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Game</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${gameName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;">₹${beforeRate} per hour</td></tr>
+          </tbody>
+        </table>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
+        <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
+          <tbody>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            ${extrasRows}
+          </tbody>
+        </table>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
+        <div style="font-size: 1.13rem; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Grand Total</div>
+        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${amount}</div>
+        <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
+      </div>
+      </body></html>
+      `;
+    }
 
     const printWindow = window.open("", "_blank")
     if (printWindow) {

@@ -256,96 +256,34 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
   }
 
   // Correct live amount calculation for active sessions, matching backend logic
-  const getLiveSessionAmount = (session: any) => {
+  // Updated: Accept games as argument for correct price lookup
+  const getLiveSessionAmount = (session: any, games: any[]) => {
+    // Try snapshot first
+    let rate = session.game_rate;
+    let rateType = session.game_rate_type;
+
+    // Fallback to game.prices[0] if missing
+    if (rate == null || rateType == null) {
+      const game = games.find(g => g.id === session.game_id);
+      const priceModel = game?.prices?.[0];
+      rate = priceModel?.price ?? 0;
+      rateType = priceModel?.name ?? '';
+    }
+
+    // Calculate amount based on rateType
     const start = new Date(session.start_time);
     const now = simulatedCurrentTime;
-    const switchTime = new Date(start);
-    switchTime.setHours(18, 0, 0, 0); // 6:00 PM
-    let beforeSec = 0, afterSec = 0;
-    if (session.switch_pricing_at_6pm && (session.game_rate_after_6pm || session.game_rate_type_after_6pm)) {
-      if (now <= switchTime) {
-        beforeSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
-      } else if (start >= switchTime) {
-        afterSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
-      } else {
-        beforeSec = Math.max(0, (switchTime.getTime() - start.getTime()) / 1000);
-        afterSec = Math.max(0, (now.getTime() - switchTime.getTime()) / 1000);
-      }
-      const beforeRate = session.game_rate || 0;
-      const afterRate = session.game_rate_after_6pm || 0;
-      const beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
-      const afterAmount = Math.round((afterSec / 3600) * afterRate);
-      return Math.max(0, beforeAmount + afterAmount);
+    const durationSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
+
+    if (rateType.toLowerCase().includes('hour')) {
+      return Math.round((durationSec / 3600) * rate);
+    } else if (rateType.toLowerCase().includes('30min')) {
+      return Math.round((durationSec / 1800) * rate);
     } else {
-      const durationSec = Math.max(0, (now.getTime() - start.getTime()) / 1000);
-      let amount = 0;
-      if (session.game_rate_type === 'hour') {
-        amount = Math.round((durationSec / 3600) * (session.game_rate || 0));
-      } else if (session.game_rate_type === '30min') {
-        amount = Math.round((durationSec / 1800) * (session.game_rate || 0));
-      }
-      return Math.max(0, amount);
+      // Default: treat as hourly
+      return Math.round((durationSec / 3600) * rate);
     }
-  }
-
-  const printBill = (session: Session) => {
-    const amount = calculateAmount(session)
-    const duration = formatDuration(session.start_time, session.end_time)
-    const userName = session.users?.name || 'Unknown'
-    const gameName = session.games?.name || 'Unknown'
-    const startTime = new Date(session.start_time).toLocaleString()
-    const endTime = session.end_time ? new Date(session.end_time).toLocaleString() : 'Ongoing'
-    const rate = session.games?.rate
-    const rateType = session.games?.rate_type === '30min' ? '30 minutes' : 'hour'
-
-    // Parse bill details for extras
-    let extrasRows = ''
-    let extrasTotal = 0
-    let grandTotal = amount
-    if (session.bill_details) {
-      try {
-        const details = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details
-        if (details.extras && Array.isArray(details.extras) && details.extras.length > 0) {
-          extrasRows = details.extras.map((extra: any) =>
-            `<tr><td style=\"padding: 6px 0; color: #555;\">${extra.name} x${extra.quantity}</td><td style=\"padding: 6px 0; text-align: right; color: #222;\">₹${extra.price} x ${extra.quantity} = ₹${extra.total}</td></tr>`
-          ).join('')
-          extrasTotal = details.extrasTotal || details.extras.reduce((sum: number, e: any) => sum + (e.total || 0), 0)
-          grandTotal = (details.total || (amount + extrasTotal))
-        }
-      } catch {}
-    }
-
-    const billContent = `
-      <div style="max-width: 400px; margin: 40px auto; border: 2px solid #222; border-radius: 16px; padding: 32px 24px; font-family: 'Segoe UI', Arial, sans-serif; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
-        <h2 style="text-align: center; font-size: 2rem; font-weight: bold; margin-bottom: 8px; letter-spacing: 2px; color: #1a202c;">GARENA GAMES</h2>
-        <div style="text-align: center; font-size: 1.1rem; color: #4a5568; margin-bottom: 18px;">Session Bill</div>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
-          <tbody>
-            <tr><td style="padding: 6px 0; color: #555;">Player</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: 500;">${userName}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Game</td><td style="padding: 6px 0; text-align: right; color: #222; font-weight: 500;">${gameName}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Start Time</td><td style="padding: 6px 0; text-align: right; color: #222;">${startTime}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">End Time</td><td style="padding: 6px 0; text-align: right; color: #222;">${endTime}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Duration</td><td style="padding: 6px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Rate</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${rate} per ${rateType}</td></tr>
-            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 6px 0; color: #555;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
-            ${extrasRows}
-            ${extrasRows ? `<tr><td style=\"padding: 6px 0; color: #555; font-weight: bold;\">Extras Total</td><td style=\"padding: 6px 0; text-align: right; color: #222; font-weight: bold;\">₹${extrasTotal}</td></tr>` : ''}
-            <tr><td colspan="2" style="border-top: 1px solid #e2e8f0; padding-top: 12px;"></td></tr>
-            <tr><td style="padding: 10px 0; font-size: 1.1rem; font-weight: bold; color: #1a202c;">Grand Total</td><td style="padding: 10px 0; text-align: right; font-size: 1.1rem; font-weight: bold; color: #16a34a;">₹${grandTotal}</td></tr>
-          </tbody>
-        </table>
-        <div style="text-align: center; color: #4a5568; font-size: 1rem; margin-top: 18px;">Thank you for playing!<br/>Visit again.</div>
-      </div>
-    `
-
-    const printWindow = window.open("", "_blank")
-    if (printWindow) {
-      printWindow.document.write(billContent)
-      printWindow.document.close()
-      printWindow.print()
-    }
-  }
+  };
 
   const closeExtrasModal = () => {
     setExtrasModalSession(null)
@@ -481,12 +419,15 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Rate</p>
-                  <p className="font-medium">₹{session.games?.rate}/{session.games?.rate_type === "30min" ? "30min" : "hr"}</p>
+                  <p className="font-medium">
+                    ₹{typeof session.game_rate === 'number' ? session.game_rate : (session.games?.rate ?? session.games?.prices?.[0]?.price ?? '-')} /
+                    {(session.game_rate_type || session.games?.rate_type || session.games?.prices?.[0]?.name) === '30min' ? '30min' : 'hr'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Amount</p>
                   <p className="font-medium text-green-600">
-                    ₹{session.is_active ? getLiveSessionAmount(session) : calculateAmount(session)}
+                    ₹{session.is_active ? getLiveSessionAmount(session, games) : calculateAmount(session)}
                   </p>
                 </div>
               </div>
@@ -503,10 +444,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
                     {loading ? "Loading..." : "End Session"}
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => printBill(session)}>
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Bill
-                  </Button>
+                  null // Removed Print Bill button
                 )}
               </div>
             </CardContent>
