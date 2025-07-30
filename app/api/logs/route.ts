@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     const durationSec = Math.floor((end.getTime() - start.getTime()) / 1000);
     // Use bill_details.total if available
     let price = 0;
-    let billDetails = {};
+    let billDetails: any = {};
     if (s.bill_details) {
       try {
         billDetails = typeof s.bill_details === 'string' ? JSON.parse(s.bill_details) : s.bill_details;

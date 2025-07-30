@@ -21,6 +21,24 @@ export type Game = {
   prices: GamePrice[];
 };
 
+export type Product = {
+  id: string;
+  name: string;
+  price: number;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type SessionProduct = {
+  id: number;
+  session_id: number;
+  product_id: string;
+  quantity: number;
+  total_price: number;
+  created_at: string;
+  product?: Product;
+};
+
 export type Session = {
   id: number;
   user_id: number;
@@ -29,10 +47,23 @@ export type Session = {
   end_time?: string;
   is_active: boolean;
   created_at: string;
+  
+  // Database fields
+  game_name?: string;
+  game_rate?: number;
+  game_rate_type?: string;
+  game_rate_after_6pm?: number;
+  game_rate_type_after_6pm?: string;
+  bill_amount?: number;
+  bill_details?: string;
+  switch_pricing_at_6pm: boolean;
+  
+  // Relations
   user?: User;
   game?: Game;
-  // Add any additional fields used in the frontend (e.g., durationSec, price)
+  extras?: SessionProduct[];
+  
+  // Computed fields (not stored in DB)
   durationSec?: number;
   price?: number;
-  bill_details?: string | { total?: number; [key: string]: any };
 }; 

@@ -17,7 +17,9 @@ function randomBillDetails() {
 
 async function main() {
   const users = await prisma.user.findMany();
-  const games = await prisma.game.findMany();
+  const games = await prisma.game.findMany({
+    include: { prices: true }
+  });
   if (users.length === 0 || games.length === 0) {
     throw new Error('Seed users and games first!');
   }
@@ -35,9 +37,9 @@ async function main() {
       end_time: end,
       is_active: false,
       created_at: start,
-      game_name: game.name,
-      game_rate: game.rate,
-      game_rate_type: game.rate_type,
+      game_name: game.title,
+      game_rate: game.prices[0]?.price || 1000,
+      game_rate_type: game.prices[0]?.name || 'hour',
       bill_amount: JSON.parse(bill_details).total,
       bill_details,
     });

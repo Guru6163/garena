@@ -18,13 +18,19 @@ interface SessionLogsProps {
   calculateAmount: (session: Session) => number
 }
 
+// Type for API response which includes users and games fields
+type SessionWithRelations = Session & {
+  users?: User;
+  games?: Game;
+}
+
 // Utility to format number as Indian Rupee with commas
 function formatINR(amount: number) {
   return amount.toLocaleString('en-IN')
 }
 
 export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps) {
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [sessions, setSessions] = useState<SessionWithRelations[]>([])
   const [filters, setFilters] = useState({
     gameId: "all",
     userId: "all",
@@ -109,7 +115,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
   }
 
   const getCurrentAmount = (session: Session) => {
-    if (!session.games) return 0
+    if (!session.game_rate || !session.game_rate_type) return 0
 
     const startTime = new Date(session.start_time)
     const currentTime = new Date()
@@ -159,7 +165,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const csvData = filteredSessions.map((session) => [
       new Date(session.start_time).toLocaleDateString(),
       session.users?.name || "Unknown",
-      session.games?.name || "Unknown",
+      session.games?.title || "Unknown",
       new Date(session.start_time).toLocaleTimeString(),
       session.end_time ? new Date(session.end_time).toLocaleTimeString() : "Ongoing",
       formatDuration(session.start_time, session.end_time),
@@ -197,7 +203,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       ${filteredSessions
         .map(
           (session) => `
-      ${session.users?.name} - ${session.games?.name}
+      ${session.users?.name} - ${session.games?.title}
       ${new Date(session.start_time).toLocaleString()} - ${session.end_time ? new Date(session.end_time).toLocaleString() : "Ongoing"}
       Duration: ${formatDuration(session.start_time, session.end_time)}
       Amount: ₹${formatINR(session.is_active ? getCurrentAmount(session) : calculateAmount(session))}
@@ -215,19 +221,29 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
   }
 
   // Print Bill function (copied and adapted from session-management.tsx)
-  const printBill = (session: Session) => {
+  const printBill = (session: SessionWithRelations) => {
     // Use robust field selection and fallbacks
     const userName = session.users?.name || 'Unknown';
     const gameName = session.game_name || session.games?.title || 'Unknown';
     const startTime = session.start_time ? new Date(session.start_time).toLocaleString() : 'Unknown';
     const endTime = session.end_time ? new Date(session.end_time).toLocaleString() : 'Ongoing';
     const duration = formatDuration(session.start_time, session.end_time);
-    const breakdown = session.bill_details?.breakdown || [];
-    const rateBefore6 = breakdown[0]?.rate ?? session.bill_details?.rate ?? 0;
+    
+    // Parse bill_details if it's a string
+    let billDetails: any = {};
+    if (session.bill_details) {
+      try {
+        billDetails = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details;
+      } catch {}
+    }
+    
+    const breakdown = billDetails.breakdown || [];
+    const rateBefore6 = breakdown[0]?.rate ?? billDetails.rate ?? 0;
     const rateAfter6 = breakdown[1]?.rate ?? 0;
-    const rateTypeBefore6 = breakdown[0]?.rateType || session.bill_details?.rate_type || 'hour';
+    const rateTypeBefore6 = breakdown[0]?.rateType || billDetails.rate_type || 'hour';
     const rateTypeAfter6 = breakdown[1]?.rateType || (breakdown[1] ? 'hour' : '');
-    const amount = typeof session.bill_details?.total === 'number' ? session.bill_details.total : 0;
+    const gameAmount = typeof billDetails.price === 'number' ? billDetails.price : 0;
+    const totalAmount = typeof billDetails.total === 'number' ? billDetails.total : 0;
 
     // Calculate breakdown for before/after 6PM
     let beforeAmount = 0, beforeSec = 0, beforeRate = 0, beforeRateType = '', afterAmount = 0, afterSec = 0, afterRate = 0, afterRateType = '';
@@ -244,8 +260,8 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       }
     } else {
       // If no breakdown, use main rate for the whole session
-      beforeAmount = amount;
-      beforeSec = (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000;
+      beforeAmount = gameAmount;
+      beforeSec = session.end_time ? (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000 : 0;
       beforeRate = rateBefore6;
       beforeRateType = rateTypeBefore6;
     }
@@ -253,7 +269,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const afterMins = Math.round(afterSec / 60);
 
     // Extras
-    const extras = session.bill_details?.extras || [];
+    const extras = billDetails.extras || [];
     let extrasRows = '';
     if (extras.length > 0) {
       extrasRows = extras.map((extra: any) =>
@@ -293,13 +309,13 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
         <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
           <tbody>
-            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${gameAmount}</td></tr>
             ${extrasRows}
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
         <div style="font-size: 1.13rem; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Grand Total</div>
-        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${amount}</div>
+        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${totalAmount}</div>
         <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
       </div>
       </body></html>
@@ -328,13 +344,13 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
         <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
           <tbody>
-            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${amount}</td></tr>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${gameAmount}</td></tr>
             ${extrasRows}
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
         <div style="font-size: 1.13rem; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Grand Total</div>
-        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${amount}</div>
+        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${totalAmount}</div>
         <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
       </div>
       </body></html>
@@ -378,12 +394,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
       {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filters
-          </CardTitle>
-        </CardHeader>
+
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="grid gap-2 w-full">
@@ -396,7 +407,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
                   <SelectItem value="all">All Games</SelectItem>
                   {games.map((game) => (
                     <SelectItem key={game.id} value={game.id.toString()}>
-                      {game.name}
+                      {game.title}
                     </SelectItem>
                   ))}
                 </SelectContent>

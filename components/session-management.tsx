@@ -88,7 +88,7 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
     const game = games.find(g => g.id.toString() === selectedGameId)
     const price = game?.prices[selectedPriceIndex]
     let priceAfter6pm = null
-    if ((game?.prices.length ?? 0) > 1 && selectedPriceIndexAfter6pm !== null) {
+    if (game && (game.prices.length ?? 0) > 1 && selectedPriceIndexAfter6pm !== null) {
       priceAfter6pm = game.prices[selectedPriceIndexAfter6pm]
     }
     setLoading(true)
@@ -101,8 +101,8 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
         body: JSON.stringify({
           user_id: Number(selectedUserId),
           game_id: Number(selectedGameId),
-          price_name: price.name,
-          price_value: price.price,
+          price_name: price?.name || '',
+          price_value: price?.price || 0,
           start_time: now.toISOString(),
           switch_pricing_at_6pm: !!priceAfter6pm,
           price_name_after_6pm: priceAfter6pm?.name,
@@ -248,9 +248,9 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
 
     const currentTime = new Date()
     const duration = (currentTime.getTime() - new Date(session.start_time).getTime()) / (1000 * 60)
-    const ratePerMinute = session.games?.rate_type === "hour"
-      ? (session.games?.rate ?? 0) / 60
-      : (session.games?.rate ?? 0) / 30
+    const ratePerMinute = session.game_rate_type === "hour"
+      ? (session.game_rate ?? 0) / 60
+      : (session.game_rate ?? 0) / 30
 
     return Math.round(duration * ratePerMinute)
   }
@@ -420,8 +420,8 @@ export function SessionManagement({ games, users, sessions, onDataChange, calcul
                 <div>
                   <p className="text-sm text-gray-600">Rate</p>
                   <p className="font-medium">
-                    ₹{typeof session.game_rate === 'number' ? session.game_rate : (session.games?.rate ?? session.games?.prices?.[0]?.price ?? '-')} /
-                    {(session.game_rate_type || session.games?.rate_type || session.games?.prices?.[0]?.name) === '30min' ? '30min' : 'hr'}
+                    ₹{typeof session.game_rate === 'number' ? session.game_rate : (session.game?.prices?.[0]?.price ?? '-')} /
+                    {(session.game_rate_type || session.game?.prices?.[0]?.name) === '30min' ? '30min' : 'hr'}
                   </p>
                 </div>
                 <div>

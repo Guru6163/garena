@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest) {
     let price = 0;
 
     // Enhanced pricing logic for switch_pricing_at_6pm
-    let breakdown = [];
+    let breakdown: any[] = [];
     if (session.switch_pricing_at_6pm && (session.game_rate_after_6pm || session.game_rate_type_after_6pm)) {
       // Find 6PM on the session's start date
       const switchTime = new Date(start);
@@ -142,7 +142,7 @@ export async function PUT(req: NextRequest) {
     });
     console.log('End session API success');
     return NextResponse.json(updated);
-  } catch (error) {
+  } catch (error: any) {
     console.error('End session error:', error);
     return NextResponse.json({ error: error?.message || String(error) }, { status: 500 });
   }
