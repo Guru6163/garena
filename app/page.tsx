@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Clock, Users, GamepadIcon, Plus, UserPlus, IndianRupee, BarChart2, LayoutDashboard, User, ListOrdered, Package } from "lucide-react"
@@ -15,7 +15,8 @@ import { ProductManagement } from "@/components/product-management"
 import { CostCalculator } from "@/components/cost-calculator"
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function HomePage() {
+// Separate component for search params logic
+function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("dashboard")
@@ -337,5 +338,21 @@ export default function HomePage() {
         {activeTab === "extras" && <ProductManagement />}
       </div>
     </div>
+  )
+}
+
+// Main component with Suspense wrapper
+export default function HomePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <HomePageContent />
+    </Suspense>
   )
 }
