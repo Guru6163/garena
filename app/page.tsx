@@ -12,7 +12,7 @@ import { SessionLogs } from "@/components/session-logs"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ProductManagement } from "@/components/product-management"
-import { CostCalculator } from "@/components/cost-calculator"
+// import { CostCalculator } from "@/components/cost-calculator"
 import { useRouter, useSearchParams } from 'next/navigation';
 
 // Separate component for search params logic
@@ -193,10 +193,7 @@ function HomePageContent() {
             <Package className="h-4 w-4 mr-2" />
             Extras
           </Button>
-          <Button variant={activeTab === "cost-calculator" ? "default" : "outline"} onClick={() => handleTabChange("cost-calculator")}> 
-            <IndianRupee className="h-4 w-4 mr-2" />
-            Cost Calculator
-          </Button>
+
         </div>
 
         {/* Dashboard */}
@@ -315,9 +312,7 @@ function HomePageContent() {
             </div>
           </>
         )}
-        {activeTab === "cost-calculator" && (
-          <CostCalculator games={games} />
-        )}
+
 
         {/* Content based on active tab */}
         {activeTab === "users" && <UserManagement users={users} onDataChange={loadData} />}
