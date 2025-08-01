@@ -89,13 +89,24 @@ function HomePageContent() {
   }, 0)
 
   function calculateAmount(session: any) {
+    // Use stored bill amount if available (like session logs do)
+    if (session.bill_details) {
+      try {
+        const billDetails = typeof session.bill_details === 'string' ? JSON.parse(session.bill_details) : session.bill_details;
+        if (typeof billDetails.total === 'number' && !isNaN(billDetails.total)) {
+          return billDetails.total;
+        }
+      } catch {}
+    }
+    
+    // Fallback to calculation if no stored bill amount
     if (!session.end_time) return 0
     const startTime = new Date(session.start_time)
     const endTime = new Date(session.end_time)
     const durationMs = endTime.getTime() - startTime.getTime()
-    const durationMinutes = durationMs / (1000 * 60)
-    const ratePerMinute = session.game_rate_type === "hour" ? session.game_rate / 60 : session.game_rate / 30
-    return Math.round(durationMinutes * ratePerMinute)
+    const durationMinutes = Math.max(0, durationMs / (1000 * 60))
+    const ratePerMinute = session.game_rate_type === "hour" ? (session.game_rate || 0) / 60 : (session.game_rate || 0) / 30
+    return Math.max(0, Math.round(durationMinutes * ratePerMinute))
   }
 
   function getCurrentAmount(session: any) {
@@ -123,28 +134,72 @@ function HomePageContent() {
   completedSessions.forEach((session) => {
     if (session.end_time) {
       const day = formatDate(new Date(session.end_time))
-      dailyRevenueMap[day] = (dailyRevenueMap[day] || 0) + calculateAmount(session)
+      const amount = calculateAmount(session) // This now uses stored bill amount
+      dailyRevenueMap[day] = (dailyRevenueMap[day] || 0) + amount
     }
   })
 
-  // Data for current month
+  // Data for current month - use direct calculation for consistency
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const monthData = Array.from({ length: daysInMonth }, (_, i) => {
     const day = new Date(now.getFullYear(), now.getMonth(), i + 1)
-    const key = formatDate(day)
-    return { date: key, revenue: dailyRevenueMap[key] || 0 }
+    const dayKey = formatDate(day)
+    
+    // Calculate revenue for this specific day using direct filtering
+    const daySessions = completedSessions.filter((session) => {
+      if (!session.end_time) return false
+      const sessionDate = new Date(session.end_time)
+      const sessionDayKey = formatDate(sessionDate)
+      return sessionDayKey === dayKey
+    })
+    
+    const dayRevenue = daySessions.reduce((sum, session) => {
+      return sum + calculateAmount(session)
+    }, 0)
+    
+    return { date: dayKey, revenue: dayRevenue }
   })
 
-  // Data for last 30 days
+
+
+  // Data for last 30 days - use direct calculation for consistency
   const last30Data = Array.from({ length: 30 }, (_, i) => {
     const day = new Date(last30Days)
     day.setDate(last30Days.getDate() + i)
-    const key = formatDate(day)
-    return { date: key, revenue: dailyRevenueMap[key] || 0 }
+    const dayKey = formatDate(day)
+    
+    // Calculate revenue for this specific day using direct filtering
+    const daySessions = completedSessions.filter((session) => {
+      if (!session.end_time) return false
+      const sessionDate = new Date(session.end_time)
+      const sessionDayKey = formatDate(sessionDate)
+      return sessionDayKey === dayKey
+    })
+    
+    const dayRevenue = daySessions.reduce((sum, session) => {
+      return sum + calculateAmount(session)
+    }, 0)
+    
+    return { date: dayKey, revenue: dayRevenue }
   })
 
   // Calculate total revenue for the current month
   const totalRevenueThisMonth = monthData.reduce((sum, day) => sum + day.revenue, 0)
+  
+  // Direct calculation for current month (more reliable)
+  const currentMonthSessions = completedSessions.filter((session) => {
+    if (!session.end_time) return false
+    const endDate = new Date(session.end_time)
+    return endDate.getMonth() === now.getMonth() && endDate.getFullYear() === now.getFullYear()
+  })
+  
+  const totalRevenueThisMonthDirect = currentMonthSessions.reduce((sum, session) => {
+    return sum + calculateAmount(session)
+  }, 0)
+
+  // If current month has no data, use last 30 days data for the monthly chart
+  const hasCurrentMonthData = monthData.some(day => day.revenue > 0)
+  const chartMonthData = hasCurrentMonthData ? monthData : last30Data
 
   // Utility to format number as Indian Rupee with commas
   function formatINR(amount: number) {
@@ -250,7 +305,7 @@ function HomePageContent() {
                   <BarChart2 className="h-6 w-6 text-indigo-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">₹{formatINR(totalRevenueThisMonth)}</div>
+                  <div className="text-2xl font-bold">₹{formatINR(totalRevenueThisMonthDirect)}</div>
                   <p className="text-xs text-muted-foreground">All completed sessions this month</p>
                 </CardContent>
               </Card>
@@ -260,11 +315,16 @@ function HomePageContent() {
               <Card className="@container/card">
                 <CardHeader>
                   <CardTitle>Revenue This Month</CardTitle>
-                  <p className="text-muted-foreground text-xs">Daily revenue for {now.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+                  <p className="text-muted-foreground text-xs">
+                    {hasCurrentMonthData 
+                      ? `Daily revenue for ${now.toLocaleString('default', { month: 'long', year: 'numeric' })}`
+                      : 'Daily revenue for the last 30 days (current month has no data)'
+                    }
+                  </p>
                 </CardHeader>
                 <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
                   <ChartContainer config={{ revenue: { label: "Revenue", color: "var(--primary)" } }} className="aspect-auto h-[250px] w-full">
-                    <AreaChart data={monthData} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
+                    <AreaChart data={chartMonthData} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="fillRevenueMonth" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.8} />

@@ -42,18 +42,26 @@ export async function PUT(req: NextRequest) {
       const switchTime = new Date(start);
       switchTime.setHours(18, 0, 0, 0); // 6:00 PM
       let beforeSec = 0, afterSec = 0;
+      let beforeAmount = 0, afterAmount = 0;
+      
       // Only split if start < 6PM and end > 6PM (not equal)
       if (end <= switchTime || start >= switchTime) {
-        // No overlap, use single rate
+        // No overlap, use single rate but still create breakdown for consistency
         if (end <= switchTime) {
           beforeSec = durationSec;
+          afterSec = 0;
           // Use before 6PM rate
           const beforeRate = session.game_rate || 0;
-          price = Math.round((beforeSec / 3600) * beforeRate);
+          beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
+          afterAmount = 0;
+          price = beforeAmount;
         } else {
+          beforeSec = 0;
           afterSec = durationSec;
           const afterRate = session.game_rate_after_6pm || 0;
-          price = Math.round((afterSec / 3600) * afterRate);
+          beforeAmount = 0;
+          afterAmount = Math.round((afterSec / 3600) * afterRate);
+          price = afterAmount;
         }
       } else {
         // Overlaps 6PM: start < 6PM, end > 6PM
@@ -61,31 +69,32 @@ export async function PUT(req: NextRequest) {
         afterSec = Math.floor((end.getTime() - switchTime.getTime()) / 1000);
         const beforeRate = session.game_rate || 0;
         const afterRate = session.game_rate_after_6pm || 0;
-        const beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
-        const afterAmount = Math.round((afterSec / 3600) * afterRate);
+        beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
+        afterAmount = Math.round((afterSec / 3600) * afterRate);
         price = beforeAmount + afterAmount;
-        // Add breakdown if session spans 6PM
-        breakdown = [
-          {
-            label: `Before 6PM`,
-            from: start,
-            to: switchTime,
-            durationSec: beforeSec,
-            rate: beforeRate,
-            rateType: session.game_rate_type,
-            amount: beforeAmount,
-          },
-          {
-            label: `After 6PM`,
-            from: switchTime,
-            to: end,
-            durationSec: afterSec,
-            rate: afterRate,
-            rateType: session.game_rate_type_after_6pm,
-            amount: afterAmount,
-          },
-        ];
       }
+      
+      // Always create breakdown for dual pricing sessions
+      breakdown = [
+        {
+          label: `Before 6PM`,
+          from: start,
+          to: switchTime,
+          durationSec: beforeSec,
+          rate: session.game_rate || 0,
+          rateType: session.game_rate_type || 'hour',
+          amount: beforeAmount,
+        },
+        {
+          label: `After 6PM`,
+          from: switchTime,
+          to: end,
+          durationSec: afterSec,
+          rate: session.game_rate_after_6pm || 0,
+          rateType: session.game_rate_type_after_6pm || 'hour',
+          amount: afterAmount,
+        },
+      ];
     } else {
       // Assume price is per hour by default
       price = Math.round((durationSec / 3600) * (session.game_rate || 0));

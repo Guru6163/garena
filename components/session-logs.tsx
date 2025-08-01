@@ -245,8 +245,13 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     const gameAmount = typeof billDetails.price === 'number' ? billDetails.price : 0;
     const totalAmount = typeof billDetails.total === 'number' ? billDetails.total : 0;
 
-    // Calculate breakdown for before/after 6PM
+    // Determine if session used dual pricing based on stored breakdown data
+    const hasBreakdown = breakdown.length > 1;
+    const useDualPricing = hasBreakdown;
+
+    // Use breakdown data from the database (calculated when session ended)
     let beforeAmount = 0, beforeSec = 0, beforeRate = 0, beforeRateType = '', afterAmount = 0, afterSec = 0, afterRate = 0, afterRateType = '';
+    
     if (breakdown.length > 0) {
       beforeAmount = breakdown[0]?.amount ?? 0;
       beforeSec = breakdown[0]?.durationSec ?? 0;
@@ -259,7 +264,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
         afterRateType = breakdown[1]?.rateType || 'hour';
       }
     } else {
-      // If no breakdown, use main rate for the whole session
+      // Fallback to single rate if no breakdown
       beforeAmount = gameAmount;
       beforeSec = session.end_time ? (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000 : 0;
       beforeRate = rateBefore6;
@@ -282,9 +287,9 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     // For Rate after 6PM, always show the per hour rate from session.game_rate_after_6pm if present
     const afterPerHourRate = session.game_rate_after_6pm || afterRate || 0;
 
-    // Bill content: use two templates based on breakdown
+    // Bill content: use two templates based on dual pricing usage
     let billContent = '';
-    if (breakdown.length > 1) {
+    if (useDualPricing) {
       // Multiple prices: show before/after 6PM
       billContent = `
       <html><head>
