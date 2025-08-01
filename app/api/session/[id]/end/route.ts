@@ -29,75 +29,148 @@ export async function PUT(req: NextRequest) {
     });
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
-    // Calculate bill amount
+    // Calculate billing information
     const start = new Date(session.start_time);
     const end = providedEndTime || new Date();
     const durationSec = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-    let price = 0;
-
-    // Enhanced pricing logic for switch_pricing_at_6pm
+    
+    // Initialize billing variables
+    let gameAmount = 0;
+    let hasDualPricing = false;
+    let pricingOverlaps6pm = false;
+    let durationBefore6pm = 0;
+    let durationAfter6pm = 0;
+    let amountBefore6pm = 0;
+    let amountAfter6pm = 0;
     let breakdown: any[] = [];
-    if (session.switch_pricing_at_6pm && (session.game_rate_after_6pm || session.game_rate_type_after_6pm)) {
+
+    // Check if session has dual pricing enabled
+    if (session.switch_pricing_at_6pm && session.game_rate_after_6pm && session.game_rate_type_after_6pm) {
+      hasDualPricing = true;
+      
       // Find 6PM on the session's start date
       const switchTime = new Date(start);
       switchTime.setHours(18, 0, 0, 0); // 6:00 PM
-      let beforeSec = 0, afterSec = 0;
-      let beforeAmount = 0, afterAmount = 0;
       
-      // Only split if start < 6PM and end > 6PM (not equal)
-      if (end <= switchTime || start >= switchTime) {
-        // No overlap, use single rate but still create breakdown for consistency
-        if (end <= switchTime) {
-          beforeSec = durationSec;
-          afterSec = 0;
-          // Use before 6PM rate
-          const beforeRate = session.game_rate || 0;
-          beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
-          afterAmount = 0;
-          price = beforeAmount;
-        } else {
-          beforeSec = 0;
-          afterSec = durationSec;
-          const afterRate = session.game_rate_after_6pm || 0;
-          beforeAmount = 0;
-          afterAmount = Math.round((afterSec / 3600) * afterRate);
-          price = afterAmount;
-        }
-      } else {
-        // Overlaps 6PM: start < 6PM, end > 6PM
-        beforeSec = Math.floor((switchTime.getTime() - start.getTime()) / 1000);
-        afterSec = Math.floor((end.getTime() - switchTime.getTime()) / 1000);
+      // Check if session overlaps 6PM
+      if (start < switchTime && end > switchTime) {
+        pricingOverlaps6pm = true;
+        
+        // Calculate durations
+        durationBefore6pm = Math.floor((switchTime.getTime() - start.getTime()) / 1000);
+        durationAfter6pm = Math.floor((end.getTime() - switchTime.getTime()) / 1000);
+        
+        // Calculate amounts for each period
         const beforeRate = session.game_rate || 0;
         const afterRate = session.game_rate_after_6pm || 0;
-        beforeAmount = Math.round((beforeSec / 3600) * beforeRate);
-        afterAmount = Math.round((afterSec / 3600) * afterRate);
-        price = beforeAmount + afterAmount;
+        
+        if (session.game_rate_type?.toLowerCase().includes('hour')) {
+          amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+        } else if (session.game_rate_type?.toLowerCase().includes('30min')) {
+          amountBefore6pm = Math.round((durationBefore6pm / 1800) * beforeRate);
+        } else {
+          amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+        }
+        
+        if (session.game_rate_type_after_6pm?.toLowerCase().includes('hour')) {
+          amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+        } else if (session.game_rate_type_after_6pm?.toLowerCase().includes('30min')) {
+          amountAfter6pm = Math.round((durationAfter6pm / 1800) * afterRate);
+        } else {
+          amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+        }
+        
+        gameAmount = amountBefore6pm + amountAfter6pm;
+        
+        // Create breakdown
+        breakdown = [
+          {
+            label: 'Before 6PM',
+            from: start,
+            to: switchTime,
+            durationSec: durationBefore6pm,
+            rate: beforeRate,
+            rateType: session.game_rate_type || 'hour',
+            amount: amountBefore6pm,
+          },
+          {
+            label: 'After 6PM',
+            from: switchTime,
+            to: end,
+            durationSec: durationAfter6pm,
+            rate: afterRate,
+            rateType: session.game_rate_type_after_6pm || 'hour',
+            amount: amountAfter6pm,
+          },
+        ];
+      } else {
+        // No overlap - use single rate
+        if (end <= switchTime) {
+          // All time before 6PM
+          durationBefore6pm = durationSec;
+          const beforeRate = session.game_rate || 0;
+          
+          if (session.game_rate_type?.toLowerCase().includes('hour')) {
+            amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+          } else if (session.game_rate_type?.toLowerCase().includes('30min')) {
+            amountBefore6pm = Math.round((durationBefore6pm / 1800) * beforeRate);
+          } else {
+            amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+          }
+          
+          gameAmount = amountBefore6pm;
+        } else {
+          // All time after 6PM
+          durationAfter6pm = durationSec;
+          const afterRate = session.game_rate_after_6pm || 0;
+          
+          if (session.game_rate_type_after_6pm?.toLowerCase().includes('hour')) {
+            amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+          } else if (session.game_rate_type_after_6pm?.toLowerCase().includes('30min')) {
+            amountAfter6pm = Math.round((durationAfter6pm / 1800) * afterRate);
+          } else {
+            amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+          }
+          
+          gameAmount = amountAfter6pm;
+        }
+        
+        breakdown = [
+          {
+            label: end <= switchTime ? 'Before 6PM' : 'After 6PM',
+            from: start,
+            to: end,
+            durationSec: durationSec,
+            rate: end <= switchTime ? (session.game_rate || 0) : (session.game_rate_after_6pm || 0),
+            rateType: end <= switchTime ? (session.game_rate_type || 'hour') : (session.game_rate_type_after_6pm || 'hour'),
+            amount: gameAmount,
+          },
+        ];
+      }
+    } else {
+      // Single pricing model
+      const rate = session.game_rate || 0;
+      const rateType = session.game_rate_type || 'hour';
+      
+      if (rateType.toLowerCase().includes('hour')) {
+        gameAmount = Math.round((durationSec / 3600) * rate);
+      } else if (rateType.toLowerCase().includes('30min')) {
+        gameAmount = Math.round((durationSec / 1800) * rate);
+      } else {
+        gameAmount = Math.round((durationSec / 3600) * rate);
       }
       
-      // Always create breakdown for dual pricing sessions
       breakdown = [
         {
-          label: `Before 6PM`,
+          label: 'Game Session',
           from: start,
-          to: switchTime,
-          durationSec: beforeSec,
-          rate: session.game_rate || 0,
-          rateType: session.game_rate_type || 'hour',
-          amount: beforeAmount,
-        },
-        {
-          label: `After 6PM`,
-          from: switchTime,
           to: end,
-          durationSec: afterSec,
-          rate: session.game_rate_after_6pm || 0,
-          rateType: session.game_rate_type_after_6pm || 'hour',
-          amount: afterAmount,
+          durationSec: durationSec,
+          rate: rate,
+          rateType: rateType,
+          amount: gameAmount,
         },
       ];
-    } else {
-      // Assume price is per hour by default
-      price = Math.round((durationSec / 3600) * (session.game_rate || 0));
     }
 
     // Handle extras (products)
@@ -120,35 +193,43 @@ export async function PUT(req: NextRequest) {
       });
     }
 
-    // Ensure price and extrasTotal are numbers
-    price = typeof price === 'number' && !isNaN(price) ? price : 0;
-    extrasTotal = typeof extrasTotal === 'number' && !isNaN(extrasTotal) ? extrasTotal : 0;
+    // Calculate total amount
+    const totalAmount = gameAmount + extrasTotal;
 
-    // Use session.game_rate_type as a label only
+    // Create detailed bill information
     const billDetails = {
       user: session.user.name,
-      game: session.game_name,
+      game: session.game_name || session.game.title,
       start_time: session.start_time,
       end_time: end,
       durationSec,
-      rate: session.game_rate,
-      rate_type: session.game_rate_type,
-      price,
-      breakdown, // add breakdown to bill details
+      gameAmount,
+      breakdown,
       extras: extrasDetails,
       extrasTotal,
-      total: price + extrasTotal, // always a number
+      total: totalAmount,
+      hasDualPricing,
+      pricingOverlaps6pm,
     };
 
+    // Update session with all billing information
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
         end_time: end,
         is_active: false,
-        bill_amount: price + extrasTotal,
+        bill_amount: totalAmount,
         bill_details: JSON.stringify(billDetails),
+        has_dual_pricing: hasDualPricing,
+        pricing_overlaps_6pm: pricingOverlaps6pm,
+        duration_before_6pm_seconds: durationBefore6pm,
+        duration_after_6pm_seconds: durationAfter6pm,
+        amount_before_6pm: amountBefore6pm,
+        amount_after_6pm: amountAfter6pm,
+        extras_amount: extrasTotal,
       },
     });
+    
     console.log('End session API success');
     return NextResponse.json(updated);
   } catch (error: any) {

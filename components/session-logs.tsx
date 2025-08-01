@@ -129,7 +129,12 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
   // Helper to get total amount including extras
   function getTotalAmount(session: Session) {
-    // Support LS sessions with extras
+    // Use stored bill_amount from database if available
+    if (session.bill_amount !== null && session.bill_amount !== undefined) {
+      return session.bill_amount;
+    }
+    
+    // Fallback to calculated amount for backward compatibility
     let extrasTotal = 0
     if (session.extras && Array.isArray(session.extras) && session.extras.length > 0) {
       extrasTotal = session.extras.reduce((sum: number, e: any) => sum + (e.quantity * (e.price || 0)), 0)
@@ -144,8 +149,14 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     return calculateAmount(session)
   }
 
-  // In the logs table, use bill_details.total for the Amount display
+  // In the logs table, use bill_amount for the Amount display
   const getDisplayAmount = (session: any) => {
+    // Use stored bill_amount from database
+    if (session.bill_amount !== null && session.bill_amount !== undefined) {
+      return session.bill_amount;
+    }
+    
+    // Fallback to bill_details.total
     const total = session.bill_details?.total;
     return typeof total === 'number' && !isNaN(total) ? total : 0;
   }
@@ -220,7 +231,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
     }
   }
 
-  // Print Bill function (copied and adapted from session-management.tsx)
+  // Print Bill function - uses stored billing data from database
   const printBill = (session: SessionWithRelations) => {
     // Use robust field selection and fallbacks
     const userName = session.users?.name || 'Unknown';
@@ -237,19 +248,14 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       } catch {}
     }
     
+    // Use stored billing data from database
     const breakdown = billDetails.breakdown || [];
-    const rateBefore6 = breakdown[0]?.rate ?? billDetails.rate ?? 0;
-    const rateAfter6 = breakdown[1]?.rate ?? 0;
-    const rateTypeBefore6 = breakdown[0]?.rateType || billDetails.rate_type || 'hour';
-    const rateTypeAfter6 = breakdown[1]?.rateType || (breakdown[1] ? 'hour' : '');
-    const gameAmount = typeof billDetails.price === 'number' ? billDetails.price : 0;
+    const gameAmount = typeof billDetails.gameAmount === 'number' ? billDetails.gameAmount : 0;
     const totalAmount = typeof billDetails.total === 'number' ? billDetails.total : 0;
+    const hasDualPricing = billDetails.hasDualPricing || session.has_dual_pricing || false;
+    const pricingOverlaps6pm = billDetails.pricingOverlaps6pm || session.pricing_overlaps_6pm || false;
 
-    // Determine if session used dual pricing based on stored breakdown data
-    const hasBreakdown = breakdown.length > 1;
-    const useDualPricing = hasBreakdown;
-
-    // Use breakdown data from the database (calculated when session ended)
+    // Use stored breakdown data from the database (calculated when session ended)
     let beforeAmount = 0, beforeSec = 0, beforeRate = 0, beforeRateType = '', afterAmount = 0, afterSec = 0, afterRate = 0, afterRateType = '';
     
     if (breakdown.length > 0) {
@@ -267,8 +273,8 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       // Fallback to single rate if no breakdown
       beforeAmount = gameAmount;
       beforeSec = session.end_time ? (new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000 : 0;
-      beforeRate = rateBefore6;
-      beforeRateType = rateTypeBefore6;
+      beforeRate = session.game_rate || 0;
+      beforeRateType = session.game_rate_type || 'hour';
     }
     const beforeMins = Math.round(beforeSec / 60);
     const afterMins = Math.round(afterSec / 60);
@@ -284,13 +290,19 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       extrasRows = `<tr><td style="padding: 6px 0; color: #475569;">Extras</td><td style="padding: 6px 0; text-align: right; color: #222;">₹0</td></tr>`;
     }
 
-    // For Rate after 6PM, always show the per hour rate from session.game_rate_after_6pm if present
+    // For Rate after 6PM, use stored rate from database
     const afterPerHourRate = session.game_rate_after_6pm || afterRate || 0;
 
-    // Bill content: use two templates based on dual pricing usage
+    // Bill content: use different templates based on stored billing data
     let billContent = '';
-    if (useDualPricing) {
-      // Multiple prices: show before/after 6PM
+    
+    // Determine the bill format based on stored billing data
+    const isDualPricingWithOverlap = hasDualPricing && pricingOverlaps6pm;
+    const isDualPricingNoOverlap = hasDualPricing && !pricingOverlaps6pm;
+    const isSinglePricing = !hasDualPricing;
+    
+    if (isDualPricingWithOverlap) {
+      // Dual pricing with 6PM overlap: show before/after 6PM breakdown
       billContent = `
       <html><head>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -325,8 +337,11 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
       </div>
       </body></html>
       `;
-    } else {
-      // Single price: show only default rate
+    } else if (isDualPricingNoOverlap) {
+      // Dual pricing without 6PM overlap: show single rate based on time period
+      const rateLabel = beforeAmount > 0 ? 'Rate (Before 6PM)' : 'Rate (After 6PM)';
+      const rateValue = beforeAmount > 0 ? `${beforeRate}Rs/H` : `${afterPerHourRate}Rs/H`;
+      
       billContent = `
       <html><head>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -342,7 +357,42 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;">₹${beforeRate} per hour</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">${rateLabel}</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${gameAmount} for ${beforeMins + afterMins}mins - (${rateValue})</span></td></tr>
+          </tbody>
+        </table>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
+        <div style="font-size: 1.08rem; font-weight: 600; color: #334155; margin-bottom: 8px;">Bill Details</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 1.01rem;">
+          <tbody>
+            <tr><td style="padding: 6px 0; color: #475569;">Game Amount</td><td style="padding: 6px 0; text-align: right; color: #222;">₹${gameAmount}</td></tr>
+            ${extrasRows}
+          </tbody>
+        </table>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin: 18px 0 10px 0;"></div>
+        <div style="font-size: 1.13rem; font-weight: bold; color: #1e293b; margin-bottom: 8px;">Grand Total</div>
+        <div style="padding: 12px 0; text-align: right; font-size: 1.13rem; font-weight: bold; color: #10b981; background: #e0f2fe; border-radius: 6px;">₹${totalAmount}</div>
+        <div style="text-align: center; color: #64748b; font-size: 1.08rem; margin-top: 10px; font-family: inherit;">Thank you for playing!<br/>Visit again.</div>
+      </div>
+      </body></html>
+      `;
+    } else {
+      // Single pricing: show only default rate
+      billContent = `
+      <html><head>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+      </head><body style="margin:0;padding:0;">
+      <div style="max-width: 440px; margin: 40px auto; border: 2px solid #222; border-radius: 18px; padding: 36px 28px; font-family: 'Inter', 'Roboto', 'Arial', 'Helvetica Neue', Arial, sans-serif; background: #f9fafb; box-shadow: 0 6px 32px rgba(0,0,0,0.10);">
+        <h2 style="text-align: center; font-size: 2.2rem; font-weight: bold; margin-bottom: 10px; letter-spacing: 2px; color: #1a202c; font-family: inherit;">GARENA GAMES</h2>
+        <div style="text-align: center; font-size: 1.15rem; color: #6366f1; margin-bottom: 22px; font-weight: 600;">Session Bill</div>
+        <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 18px;"></div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 1.04rem;">
+          <tbody>
+            <tr><td style="padding: 7px 0; color: #64748b;">Player</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${userName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Game</td><td style="padding: 7px 0; text-align: right; color: #222; font-weight: 600;">${gameName}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${gameAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>

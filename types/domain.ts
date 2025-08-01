@@ -58,6 +58,15 @@ export type Session = {
   bill_details?: string;
   switch_pricing_at_6pm: boolean;
   
+  // New billing fields
+  has_dual_pricing?: boolean;
+  pricing_overlaps_6pm?: boolean;
+  duration_before_6pm_seconds?: number;
+  duration_after_6pm_seconds?: number;
+  amount_before_6pm?: number;
+  amount_after_6pm?: number;
+  extras_amount?: number;
+  
   // Relations
   user?: User;
   game?: Game;

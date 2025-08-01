@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../lib/generated/prisma"
@@ -15,71 +9,76 @@ datasource db {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   name       String
-  phone      String?  @unique
-  email      String?  @unique
-  created_at DateTime @default(now())
-  is_active  Boolean  @default(true)
+  phone      String?   @unique
+  email      String?   @unique
+  created_at DateTime  @default(now())
+  is_active  Boolean   @default(true)
   sessions   Session[]
 }
 
 model Game {
   id         Int         @id @default(autoincrement())
-  title      String      // changed from name
   is_active  Boolean     @default(true)
   created_at DateTime    @default(now())
+  title      String
+  prices     GamePrice[]
   sessions   Session[]
-  prices     GamePrice[] // new relation for pricing models
 }
 
 model GamePrice {
-  id      Int    @id @default(autoincrement())
-  name    String // e.g. "Per Hour", "Per 30 Min", "VIP"
-  price   Int    // price in rupees
-  game    Game   @relation(fields: [gameId], references: [id])
-  gameId  Int
+  id     Int    @id @default(autoincrement())
+  name   String
+  price  Int
+  gameId Int
+  game   Game   @relation(fields: [gameId], references: [id])
 }
 
 model Session {
-  id         Int      @id @default(autoincrement())
-  user       User     @relation(fields: [user_id], references: [id])
-  user_id    Int
-  game       Game     @relation(fields: [game_id], references: [id])
-  game_id    Int
-  start_time DateTime
-  end_time   DateTime?
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  // Add snapshot fields for game details
-  game_name  String?
-  game_rate  Int?
-  game_rate_type String?
-  game_rate_after_6pm Int?
-  game_rate_type_after_6pm String?
-  bill_amount Int?
-  bill_details String?
-  // New: relation to session extras
-  extras     SessionProduct[]
-  switch_pricing_at_6pm Boolean @default(false) // Whether to switch pricing at 6PM
+  id                          Int              @id @default(autoincrement())
+  user_id                     Int
+  game_id                     Int
+  start_time                  DateTime
+  end_time                    DateTime?
+  is_active                   Boolean          @default(true)
+  created_at                  DateTime         @default(now())
+  game_name                   String?
+  game_rate                   Int?
+  game_rate_type              String?
+  bill_amount                 Int?
+  bill_details                String?
+  switch_pricing_at_6pm       Boolean          @default(false)
+  game_rate_after_6pm         Int?
+  game_rate_type_after_6pm    String?
+  amount_after_6pm            Int?
+  amount_before_6pm           Int?
+  duration_after_6pm_seconds  Int?
+  duration_before_6pm_seconds Int?
+  extras_amount               Int              @default(0)
+  has_dual_pricing            Boolean          @default(false)
+  pricing_overlaps_6pm        Boolean          @default(false)
+  game                        Game             @relation(fields: [game_id], references: [id])
+  user                        User             @relation(fields: [user_id], references: [id])
+  extras                      SessionProduct[]
 }
 
 model Product {
-  id         String   @id @default(uuid())
-  name       String   @unique
-  price      Int      // price per unit
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
+  id              String           @id @default(uuid())
+  name            String           @unique
+  price           Int
+  is_active       Boolean          @default(true)
+  created_at      DateTime         @default(now())
   sessionProducts SessionProduct[]
 }
 
 model SessionProduct {
-  id         Int      @id @default(autoincrement())
-  session    Session  @relation(fields: [session_id], references: [id])
-  session_id Int
-  product    Product  @relation(fields: [product_id], references: [id])
-  product_id String
-  quantity   Int
-  total_price Int     // price * quantity (snapshot)
-  created_at DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  session_id  Int
+  product_id  String
+  quantity    Int
+  total_price Int
+  created_at  DateTime @default(now())
+  product     Product  @relation(fields: [product_id], references: [id])
+  session     Session  @relation(fields: [session_id], references: [id])
 }
