@@ -50,13 +50,25 @@ function HomePageContent() {
       setLoading(true)
       // Fetch games from API
       const gamesRes = await fetch("/api/game")
+      if (!gamesRes.ok) {
+        throw new Error(`Games API error: ${gamesRes.status} ${gamesRes.statusText}`)
+      }
       const gamesData = await gamesRes.json()
+      
       // Fetch users from API
       const usersRes = await fetch("/api/user")
+      if (!usersRes.ok) {
+        throw new Error(`Users API error: ${usersRes.status} ${usersRes.statusText}`)
+      }
       const usersData = await usersRes.json()
+      
       // Fetch sessions from API
       const sessionsRes = await fetch("/api/session")
+      if (!sessionsRes.ok) {
+        throw new Error(`Sessions API error: ${sessionsRes.status} ${sessionsRes.statusText}`)
+      }
       const sessionsData = await sessionsRes.json()
+      
       setGames(gamesData)
       setUsers(usersData)
       setSessions(sessionsData)

@@ -21,11 +21,16 @@ export async function POST(req: NextRequest) {
 
 // Get all games with their pricing models
 export async function GET() {
-  const games = await prisma.game.findMany({
-    orderBy: { created_at: 'desc' },
-    include: { prices: true }
-  });
-  return NextResponse.json(games);
+  try {
+    const games = await prisma.game.findMany({
+      orderBy: { created_at: 'desc' },
+      include: { prices: true }
+    });
+    return NextResponse.json(games);
+  } catch (error) {
+    console.error('Error fetching games:', error);
+    return NextResponse.json({ error: 'Failed to fetch games' }, { status: 500 });
+  }
 }
 
 // Update a game and its pricing models

@@ -96,9 +96,15 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
 
         return true
       })
-    // Sort by start_time descending (newest first)
-    completed.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
-    console.log('Filtered completed sessions for logs:', completed)
+    
+    // Sort by start_time descending (newest first) - ensure proper date comparison
+    completed.sort((a, b) => {
+      const dateA = new Date(a.start_time).getTime();
+      const dateB = new Date(b.start_time).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
+    
+
     return completed
   }, [displaySessions, filters])
 
@@ -318,8 +324,8 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">Rate before 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${beforeAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">Rate after 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${afterAmount} for ${afterMins}mins - (${afterPerHourRate}Rs/H)</span></td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate before 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-size: 1.08em;">₹${beforeAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate after 6PM</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-size: 1.08em;">₹${afterAmount} for ${afterMins}mins - (${afterPerHourRate}Rs/H)</span></td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
@@ -357,7 +363,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">${rateLabel}</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${gameAmount} for ${beforeMins + afterMins}mins - (${rateValue})</span></td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">${rateLabel}</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style=" font-size: 1.08em;">₹${gameAmount} for ${beforeMins + afterMins}mins - (${rateValue})</span></td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>
@@ -392,7 +398,7 @@ export function SessionLogs({ games, users, calculateAmount }: SessionLogsProps)
             <tr><td style="padding: 7px 0; color: #64748b;">Start Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${startTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">End Time</td><td style="padding: 7px 0; text-align: right; color: #222;">${endTime}</td></tr>
             <tr><td style="padding: 7px 0; color: #64748b;">Duration</td><td style="padding: 7px 0; text-align: right; color: #222;">${duration}</td></tr>
-            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-family: 'Comic Sans MS', 'Comic Sans', cursive; font-size: 1.08em;">₹${gameAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
+            <tr><td style="padding: 7px 0; color: #64748b;">Rate</td><td style="padding: 7px 0; text-align: right; color: #222;"><span style="font-size: 1.08em;">₹${gameAmount} for ${beforeMins}mins - (${beforeRate}Rs/H)</span></td></tr>
           </tbody>
         </table>
         <div style="border-bottom: 1.5px dashed #cbd5e1; margin-bottom: 12px;"></div>

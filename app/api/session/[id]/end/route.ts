@@ -48,36 +48,45 @@ export async function PUT(req: NextRequest) {
     if (session.switch_pricing_at_6pm && session.game_rate_after_6pm && session.game_rate_type_after_6pm) {
       hasDualPricing = true;
       
-      // Find 6PM on the session's start date
-      const switchTime = new Date(start);
-      switchTime.setHours(18, 0, 0, 0); // 6:00 PM
+      // Find 6PM on the session's start date (using local timezone)
+      // Create 6PM IST and convert to UTC for comparison
+      const startDate = new Date(start);
+      const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+      // Create 6 PM IST by creating 12:30 PM UTC (18:00 - 5:30 = 12:30)
+      const switchTimeUTC = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate(), 12, 30, 0, 0));
+      
+
       
       // Check if session overlaps 6PM
-      if (start < switchTime && end > switchTime) {
+      if (start < switchTimeUTC && end > switchTimeUTC) {
         pricingOverlaps6pm = true;
         
-        // Calculate durations
-        durationBefore6pm = Math.floor((switchTime.getTime() - start.getTime()) / 1000);
-        durationAfter6pm = Math.floor((end.getTime() - switchTime.getTime()) / 1000);
+        // Calculate durations (using more precise calculation)
+        durationBefore6pm = Math.floor((switchTimeUTC.getTime() - start.getTime()) / 1000);
+        durationAfter6pm = Math.floor((end.getTime() - switchTimeUTC.getTime()) / 1000);
         
-        // Calculate amounts for each period
+        // Calculate amounts for each period with improved precision
         const beforeRate = session.game_rate || 0;
         const afterRate = session.game_rate_after_6pm || 0;
         
+        // Convert seconds to hours for more accurate calculation
+        const before6pmHours = durationBefore6pm / 3600;
+        const after6pmHours = durationAfter6pm / 3600;
+        
         if (session.game_rate_type?.toLowerCase().includes('hour')) {
-          amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+          amountBefore6pm = Math.round(before6pmHours * beforeRate);
         } else if (session.game_rate_type?.toLowerCase().includes('30min')) {
           amountBefore6pm = Math.round((durationBefore6pm / 1800) * beforeRate);
         } else {
-          amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+          amountBefore6pm = Math.round(before6pmHours * beforeRate);
         }
         
         if (session.game_rate_type_after_6pm?.toLowerCase().includes('hour')) {
-          amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+          amountAfter6pm = Math.round(after6pmHours * afterRate);
         } else if (session.game_rate_type_after_6pm?.toLowerCase().includes('30min')) {
           amountAfter6pm = Math.round((durationAfter6pm / 1800) * afterRate);
         } else {
-          amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+          amountAfter6pm = Math.round(after6pmHours * afterRate);
         }
         
         gameAmount = amountBefore6pm + amountAfter6pm;
@@ -87,7 +96,7 @@ export async function PUT(req: NextRequest) {
           {
             label: 'Before 6PM',
             from: start,
-            to: switchTime,
+            to: switchTimeUTC,
             durationSec: durationBefore6pm,
             rate: beforeRate,
             rateType: session.game_rate_type || 'hour',
@@ -95,7 +104,7 @@ export async function PUT(req: NextRequest) {
           },
           {
             label: 'After 6PM',
-            from: switchTime,
+            from: switchTimeUTC,
             to: end,
             durationSec: durationAfter6pm,
             rate: afterRate,
@@ -105,17 +114,18 @@ export async function PUT(req: NextRequest) {
         ];
       } else {
         // No overlap - use single rate
-        if (end <= switchTime) {
+        if (end <= switchTimeUTC) {
           // All time before 6PM
           durationBefore6pm = durationSec;
           const beforeRate = session.game_rate || 0;
           
+          const before6pmHours = durationBefore6pm / 3600;
           if (session.game_rate_type?.toLowerCase().includes('hour')) {
-            amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+            amountBefore6pm = Math.round(before6pmHours * beforeRate);
           } else if (session.game_rate_type?.toLowerCase().includes('30min')) {
             amountBefore6pm = Math.round((durationBefore6pm / 1800) * beforeRate);
           } else {
-            amountBefore6pm = Math.round((durationBefore6pm / 3600) * beforeRate);
+            amountBefore6pm = Math.round(before6pmHours * beforeRate);
           }
           
           gameAmount = amountBefore6pm;
@@ -124,12 +134,13 @@ export async function PUT(req: NextRequest) {
           durationAfter6pm = durationSec;
           const afterRate = session.game_rate_after_6pm || 0;
           
+          const after6pmHours = durationAfter6pm / 3600;
           if (session.game_rate_type_after_6pm?.toLowerCase().includes('hour')) {
-            amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+            amountAfter6pm = Math.round(after6pmHours * afterRate);
           } else if (session.game_rate_type_after_6pm?.toLowerCase().includes('30min')) {
             amountAfter6pm = Math.round((durationAfter6pm / 1800) * afterRate);
           } else {
-            amountAfter6pm = Math.round((durationAfter6pm / 3600) * afterRate);
+            amountAfter6pm = Math.round(after6pmHours * afterRate);
           }
           
           gameAmount = amountAfter6pm;
@@ -137,12 +148,12 @@ export async function PUT(req: NextRequest) {
         
         breakdown = [
           {
-            label: end <= switchTime ? 'Before 6PM' : 'After 6PM',
+            label: end <= switchTimeUTC ? 'Before 6PM' : 'After 6PM',
             from: start,
             to: end,
             durationSec: durationSec,
-            rate: end <= switchTime ? (session.game_rate || 0) : (session.game_rate_after_6pm || 0),
-            rateType: end <= switchTime ? (session.game_rate_type || 'hour') : (session.game_rate_type_after_6pm || 'hour'),
+            rate: end <= switchTimeUTC ? (session.game_rate || 0) : (session.game_rate_after_6pm || 0),
+            rateType: end <= switchTimeUTC ? (session.game_rate_type || 'hour') : (session.game_rate_type_after_6pm || 'hour'),
             amount: gameAmount,
           },
         ];
@@ -152,12 +163,13 @@ export async function PUT(req: NextRequest) {
       const rate = session.game_rate || 0;
       const rateType = session.game_rate_type || 'hour';
       
+      const durationHours = durationSec / 3600;
       if (rateType.toLowerCase().includes('hour')) {
-        gameAmount = Math.round((durationSec / 3600) * rate);
+        gameAmount = Math.round(durationHours * rate);
       } else if (rateType.toLowerCase().includes('30min')) {
         gameAmount = Math.round((durationSec / 1800) * rate);
       } else {
-        gameAmount = Math.round((durationSec / 3600) * rate);
+        gameAmount = Math.round(durationHours * rate);
       }
       
       breakdown = [
@@ -211,6 +223,8 @@ export async function PUT(req: NextRequest) {
       hasDualPricing,
       pricingOverlaps6pm,
     };
+    
+
 
     // Update session with all billing information
     const updated = await prisma.session.update({

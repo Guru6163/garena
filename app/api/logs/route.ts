@@ -16,10 +16,15 @@ export async function GET(req: NextRequest) {
   const sessions = await prisma.session.findMany({
     where,
     include: { user: true, game: true },
-    orderBy: { start_time: 'desc' },
+    orderBy: [
+      { start_time: 'desc' },
+      { id: 'desc' } // Secondary sort by ID to ensure consistent ordering
+    ],
   });
 
   // Add duration in seconds and price calculation
+
+  
   const logs = sessions.map((s) => {
     const end = s.end_time ? new Date(s.end_time) : new Date();
     const start = new Date(s.start_time);
@@ -66,5 +71,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
+
+  
   return NextResponse.json(logs);
 } 
